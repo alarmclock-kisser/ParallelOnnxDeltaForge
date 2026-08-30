@@ -1,0 +1,47 @@
+﻿using ParallelOnnxDeltaForge.Shared.MediaDtos;
+using ParallelOnnxDeltaForge.Media;
+
+namespace ParallelOnnxDeltaForge.Api.Services.DtoBuilders
+{
+    public static class MediaInfosBuilder
+    {
+        public static ImageInfo BuildImageInfo(ImageObj imageObj)
+        {
+            return new ImageInfo()
+            {
+                Id = imageObj.Id,
+                FilePath = imageObj.Filepath,
+                CreatedAt = imageObj.CreatedAt,
+                Name = imageObj.Name,
+                Pointer = imageObj.Pointer.ToString(),
+                Width = imageObj.Width,
+                Height = imageObj.Height,
+                Channels = imageObj.Channels,
+                BitDepth = imageObj.Bitdepth,
+                OriginalSizeMb = imageObj.SizeMb,
+                Meta = imageObj.Meta
+            };
+        }
+
+        public static AudioInfo BuildAudioInfo(AudioObj audioObj)
+        {
+            return new AudioInfo()
+            {
+                Id = audioObj.Id,
+                FilePath = audioObj.FilePath,
+                CreatedAt = audioObj.CreatedAt,
+                Name = audioObj.Name,
+                Pointer = audioObj.Pointer.ToString(),
+                ChunkSize = audioObj.ChunkSize,
+                Overlap = audioObj.Overlap,
+                Length = audioObj.Length.ToString(),
+                SampleRate = audioObj.SampleRate,
+                Channels = audioObj.Channels,
+                BitDepth = audioObj.BitDepth,
+                DurationSeconds = (float) audioObj.Duration.TotalSeconds,
+                Bpm = null
+            };
+        }
+
+    }
+}

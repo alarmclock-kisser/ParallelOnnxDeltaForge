@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="ParallelOnnxDeltaForge.Api/ParallelOnnxDeltaForge.Api.csproj" />
+  <Project Path="ParallelOnnxDeltaForge.Media/ParallelOnnxDeltaForge.Media.csproj" />
+  <Project Path="ParallelOnnxDeltaForge.Runtime/ParallelOnnxDeltaForge.Runtime.csproj" />
+  <Project Path="ParallelOnnxDeltaForge.Shared/ParallelOnnxDeltaForge.Shared.csproj" />
+</Solution>
