@@ -6,7 +6,7 @@ namespace ParallelOnnxDeltaForge.Shared.Interfaces
 {
     /// <summary>
     /// Interface for media data (AudioData and ImageData).
-    /// Includes JsonConverter attributes for proper serialization in WebAPI/nswag/Blazor architectures.
+    /// Mediendaten für Bildübertragung. Includes JsonConverter attributes for proper serialization in WebAPI/nswag/Blazor architectures.
     /// The System.Text.Json and Newtonsoft.Json converters enable proper serialization
     /// when these DTOs are returned or received by API controllers in WebAPI/nswag/Blazor scenarios.
     /// </summary>
