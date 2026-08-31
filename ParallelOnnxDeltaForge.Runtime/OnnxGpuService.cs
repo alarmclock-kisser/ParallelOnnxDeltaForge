@@ -81,7 +81,8 @@ namespace ParallelOnnxDeltaForge.Runtime
                 }
                 catch (OnnxRuntimeException onnxEx)
                 {
-
+                    this.Logger.LogError($"[ONNX] ONNX Runtime error while loading model: {onnxEx.Message}");
+                    throw;
                 }
 
                 if (!this._activeSessions.TryAdd(sessionId, session))

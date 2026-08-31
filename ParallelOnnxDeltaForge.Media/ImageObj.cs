@@ -3,16 +3,27 @@ using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Bmp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
+using ParallelOnnxDeltaForge.Shared.Interfaces;
 
 namespace ParallelOnnxDeltaForge.Media
 {
-    public class ImageObj : IDisposable
+    public class ImageObj : IMediaObj
     {
-        public Guid Id { get; private set; }
-        public DateTime CreatedAt { get; init; } = DateTime.Now;
+        public Guid Id { get; }
+        public DateTime CreatedAt { get; } = DateTime.Now;
 
         public string Filepath { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Explicit implementation of <see cref="IMediaObj.FilePath"/>.
+        /// Maps to the existing <c>Filepath</c> property (legacy casing).
+        /// </summary>
+        string IMediaObj.FilePath
+        {
+            get => this.Filepath;
+            set => this.Filepath = value;
+        }
 
         public Image<Rgba32>? Img { get; set; } = null;
         public int Width { get; set; } = 0;
@@ -226,8 +237,6 @@ namespace ParallelOnnxDeltaForge.Media
         {
             ImageObj clone = new(this.Width, this.Height)
             {
-                Id = Guid.NewGuid(),
-                CreatedAt = DateTime.Now,
                 Filepath = this.Filepath,
                 Name = this.Name,
                 Channels = this.Channels,

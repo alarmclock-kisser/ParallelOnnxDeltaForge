@@ -18,7 +18,7 @@ namespace ParallelOnnxDeltaForge.Api.Services
 
         public ImageObj? GetImage(Guid id)
         {
-            return this.images[id];
+            return this.images[id] as ImageObj;
         }
 
         public ImageObj? GetImage(string name)
@@ -28,12 +28,12 @@ namespace ParallelOnnxDeltaForge.Api.Services
 
         public AudioObj? GetAudio(Guid id)
         {
-            return this.audios[id];
+            return this.audios[id] as AudioObj;
         }
 
         public AudioObj? GetAudio(string name)
         {
-            return this.audios[name, false];
+            return this.audios[name, false] as AudioObj;
         }
 
         public ImageInfo GetImageInfo(ImageObj image)
@@ -49,9 +49,9 @@ namespace ParallelOnnxDeltaForge.Api.Services
         public ImageInfo? GetImageInfo(Guid imageId)
         {
             var obj = this.images[imageId];
-            if (obj != null)
+            if (obj is ImageObj imageObj)
             {
-                return this.GetImageInfo(obj);
+                return this.GetImageInfo(imageObj);
             }
             return null;
         }
@@ -59,9 +59,9 @@ namespace ParallelOnnxDeltaForge.Api.Services
         public AudioInfo? GetAudioInfo(Guid audioId)
         {
             var obj = this.audios[audioId];
-            if (obj != null)
+            if (obj is AudioObj audioObj)
             {
-                return this.GetAudioInfo(obj);
+                return this.GetAudioInfo(audioObj);
             }
             return null;
         }

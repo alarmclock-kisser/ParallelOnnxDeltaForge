@@ -178,18 +178,18 @@ namespace ParallelOnnxDeltaForge.Api.Controllers
                     return this.File(fileBytes, contentType, $"{image.Name}.{format}");
                 }
                 var audio = Guid.TryParse(idOrName, out guid) ? this.audios[guid] : this.audios[idOrName];
-                if (audio != null)
+                if (audio is AudioObj audioObj)
                 {
                     if (normalizeAudio > 0)
                     {
-                        await audio.NormalizeAsync(normalizeAudio);
+                        await audioObj.NormalizeAsync(normalizeAudio);
                     }
 
                     // Export audio with bits from format to temp path
-                    tempFilePath = await audio.ExportWavAsync(Path.GetDirectoryName(tempFilePath), null, audioBits) ?? tempFilePath;
+                    tempFilePath = await audioObj.ExportWavAsync(Path.GetDirectoryName(tempFilePath), null, audioBits) ?? tempFilePath;
 
                     var fileBytes = await System.IO.File.ReadAllBytesAsync(tempFilePath);
-                    return this.File(fileBytes, "application/octet-stream", $"{audio.Name}.wav");
+                    return this.File(fileBytes, "application/octet-stream", $"{audioObj.Name}.wav");
                 }
                 return this.NotFound(new ProblemDetails
                 {
@@ -224,7 +224,7 @@ namespace ParallelOnnxDeltaForge.Api.Controllers
             try
             {
                 var image = Guid.TryParse(idOrName, out var guid) ? this.images[guid] : this.images[idOrName];
-                if (image == null)
+                if (image is not ImageObj imageObj)
                 {
                     return this.NotFound(new ProblemDetails
                     {
@@ -234,7 +234,7 @@ namespace ParallelOnnxDeltaForge.Api.Controllers
                     });
                 }
 
-                var imageData = MediaDatasBuilder.BuildImageData(image, format, keepData);
+                var imageData = MediaDatasBuilder.BuildImageData(imageObj, format, keepData);
                 return this.Ok(imageData);
             }
             catch (Exception ex)
@@ -255,7 +255,7 @@ namespace ParallelOnnxDeltaForge.Api.Controllers
             try
             {
                 var image = Guid.TryParse(idOrName, out var guid) ? this.images[guid] : this.images[idOrName];
-                if (image == null)
+                if (image is not ImageObj imageObj)
                 {
                     return this.NotFound(new ProblemDetails
                     {
@@ -265,7 +265,7 @@ namespace ParallelOnnxDeltaForge.Api.Controllers
                     });
                 }
 
-                var imagePreview = MediaDatasBuilder.BuildImagePreview(image, maxDimenions);
+                var imagePreview = MediaDatasBuilder.BuildImagePreview(imageObj, maxDimenions);
                 return this.Ok(imagePreview);
             }
             catch (Exception ex)
@@ -286,7 +286,7 @@ namespace ParallelOnnxDeltaForge.Api.Controllers
             try
             {
                 var audio = Guid.TryParse(idOrName, out var guid) ? this.audios[guid] : this.audios[idOrName];
-                if (audio == null)
+                if (audio is not AudioObj audioObj)
                 {
                     return this.NotFound(new ProblemDetails
                     {
@@ -296,7 +296,7 @@ namespace ParallelOnnxDeltaForge.Api.Controllers
                     });
                 }
 
-                var audioData = MediaDatasBuilder.BuildAudioData(audio, chunkSize, overlap, keepData);
+                var audioData = MediaDatasBuilder.BuildAudioData(audioObj, chunkSize, overlap, keepData);
                 return this.Ok(audioData);
             }
             catch (Exception ex)
@@ -317,7 +317,7 @@ namespace ParallelOnnxDeltaForge.Api.Controllers
             try
             {
                 var audio = Guid.TryParse(idOrName, out var guid) ? this.audios[guid] : this.audios[idOrName];
-                if (audio == null)
+                if (audio is not AudioObj audioObj)
                 {
                     return this.NotFound(new ProblemDetails
                     {
@@ -326,7 +326,7 @@ namespace ParallelOnnxDeltaForge.Api.Controllers
                         Status = 404
                     });
                 }
-                var audioPreview = MediaDatasBuilder.BuildAudioPreview(audio, width, height);
+                var audioPreview = MediaDatasBuilder.BuildAudioPreview(audioObj, width, height);
                 return this.Ok(audioPreview);
             }
             catch (Exception ex)

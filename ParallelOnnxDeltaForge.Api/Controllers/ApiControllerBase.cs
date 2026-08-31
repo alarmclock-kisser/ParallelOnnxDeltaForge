@@ -21,7 +21,7 @@ namespace ParallelOnnxDeltaForge.Api.Controllers
         {
             if (value is ProblemDetails pd)
             {
-                RollingFileMemoryLogger.Log($"ProblemDetails: Title={pd.Title}, Detail={pd.Detail}, Status={pd.Status}");
+                RollingFileMemoryLogger.Instance.Log($"ProblemDetails: Title={pd.Title}, Detail={pd.Detail}, Status={pd.Status}");
             }
             return base.StatusCode(statusCode, value);
         }
@@ -57,10 +57,10 @@ namespace ParallelOnnxDeltaForge.Api.Controllers
             }
             catch (Exception ex)
             {
-                RollingFileMemoryLogger.Log(ex);
+                RollingFileMemoryLogger.Instance.Log(ex);
             }
 
-            RollingFileMemoryLogger.Log($"{endpointPrefix} {log}");
+            RollingFileMemoryLogger.Instance.Log($"{endpointPrefix} {log}");
 
             return base.Ok(value);
         }

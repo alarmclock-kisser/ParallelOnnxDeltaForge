@@ -3,6 +3,8 @@ using Newtonsoft.Json;
 using ParallelOnnxDeltaForge.Api.Services;
 using ParallelOnnxDeltaForge.Media;
 using ParallelOnnxDeltaForge.Shared;
+using ParallelOnnxDeltaForge.Shared.Interfaces;
+using ParallelOnnxDeltaForge.Shared.Options;
 using Swashbuckle.AspNetCore.SwaggerUI;
 using static ParallelOnnxDeltaForge.Shared.RollingFileMemoryLogger;
 
@@ -18,8 +20,9 @@ namespace ParallelOnnxDeltaForge.Api
             var loggerSettings = builder.Configuration.GetSection("LoggerSettings").Get<RollingFileMemoryLoggerOptions>() ?? new();
 
             // Add services to the container.
-            builder.Services.AddSingleton<AudioCollection>();
-            builder.Services.AddSingleton<ImageCollection>();
+            builder.Services.AddSingleton<IRollingFileMemoryLogger, RollingFileMemoryLogger>();
+            builder.Services.AddSingleton<IMediaCollection, AudioCollection>();
+            builder.Services.AddSingleton<IMediaCollection, ImageCollection>();
             builder.Services.AddSingleton<IAssetProvider, AssetProvider>();
 
             // Configure CORS to allow requests from the specified origins
@@ -56,7 +59,7 @@ namespace ParallelOnnxDeltaForge.Api
             var app = builder.Build();
 
             // Initialize the StaticLogger with the settings and configure it to save logs on application stopping
-            RollingFileMemoryLogger.InitializeLogger(loggerSettings, () => RollingFileMemoryLogger.SaveToRepository(), app.Lifetime.ApplicationStopping, SynchronizationContext.Current);
+            Instance.InitializeLogger(loggerSettings, () => Instance.SaveToRepository(), app.Lifetime.ApplicationStopping, SynchronizationContext.Current);
 
             // Configure the HTTP(S) request pipeline.
             app.UseHttpsRedirection();

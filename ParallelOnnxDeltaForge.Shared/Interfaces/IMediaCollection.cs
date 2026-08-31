@@ -6,7 +6,7 @@ namespace ParallelOnnxDeltaForge.Shared.Interfaces
     /// Interface for media collections (AudioCollection and ImageCollection).
     /// Provides common properties and methods for collections of media objects.
     /// </summary>
-    public interface IMediaCollection
+    public interface IMediaCollection : IDisposable
     {
         /// <summary>
         /// Gets the read-only collection of media objects.

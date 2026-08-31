@@ -6,15 +6,31 @@ using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 using System.Globalization;
 using ParallelOnnxDeltaForge.Shared;
+using ParallelOnnxDeltaForge.Shared.Interfaces;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
 namespace ParallelOnnxDeltaForge.Media
 {
-    public class AudioObj : IDisposable
+    public class AudioObj : IDisposable, IMediaObj
     {
-        public readonly Guid Id = Guid.NewGuid();
-        public readonly DateTime CreatedAt = DateTime.UtcNow;
+        /// <summary>
+        /// Gets the unique identifier for this audio object.
+        /// Assigned at creation and cannot be changed.
+        /// </summary>
+        public Guid Id { get; } = Guid.NewGuid();
+
+        /// <summary>
+        /// Gets the creation timestamp of this audio object.
+        /// Assigned at creation and cannot be changed.
+        /// </summary>
+        public DateTime CreatedAt { get; } = DateTime.UtcNow;
+
+        // Explicit interface implementations – IMediaObj requires setters, but these values are immutable by design.
+        Guid IMediaObj.Id => this.Id;
+        void IMediaObj.Id.set { /* Intentionally not settable */ }
+        DateTime IMediaObj.CreatedAt => this.CreatedAt;
+        void IMediaObj.CreatedAt.set { /* Intentionally not settable */ }
 
         public string FilePath { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
@@ -114,8 +130,8 @@ namespace ParallelOnnxDeltaForge.Media
             catch (Exception ex)
             {
                 this.FilePath = string.Empty;
-                RollingFileMemoryLogger.Log($"Failed to load audio file: ");
-                RollingFileMemoryLogger.Log(ex);
+                RollingFileMemoryLogger.Instance.Log($"Failed to load audio file: ");
+                RollingFileMemoryLogger.Instance.Log(ex);
                 return false;
             }
 
@@ -134,7 +150,7 @@ namespace ParallelOnnxDeltaForge.Media
         {
             if (data == null || data.Length == 0)
             {
-                RollingFileMemoryLogger.Log("Cannot load audio from an empty byte array.");
+                RollingFileMemoryLogger.Instance.Log("Cannot load audio from an empty byte array.");
                 return false;
             }
 
@@ -155,7 +171,7 @@ namespace ParallelOnnxDeltaForge.Media
             }
             catch (Exception ex)
             {
-                RollingFileMemoryLogger.Log("Failed to load audio from bytes", ex);
+                RollingFileMemoryLogger.Instance.Log("Failed to load audio from bytes", ex);
                 return false;
             }
             finally
@@ -220,7 +236,7 @@ namespace ParallelOnnxDeltaForge.Media
             }
             catch (Exception ex)
             {
-                RollingFileMemoryLogger.Log("Failed to encode audio to WAV bytes", ex);
+                RollingFileMemoryLogger.Instance.Log("Failed to encode audio to WAV bytes", ex);
                 return [];
             }
         }
@@ -285,8 +301,8 @@ namespace ParallelOnnxDeltaForge.Media
             }
             catch (Exception ex)
             {
-                RollingFileMemoryLogger.Log($"Failed to resample audio:");
-                RollingFileMemoryLogger.Log(ex);
+                RollingFileMemoryLogger.Instance.Log($"Failed to resample audio:");
+                RollingFileMemoryLogger.Instance.Log(ex);
                 return false;
             }
         }
@@ -314,7 +330,7 @@ namespace ParallelOnnxDeltaForge.Media
                     {
                         // Use the exact other than set channels, if it's not mono or stereo
                         targetChannels = this.Channels == 1 ? 2 : 1;
-                        await RollingFileMemoryLogger.LogAsync($"Invalid bitdepth detected ({targetChannels}). Using {targetChannels} since audio has {this.Channels} channels.");
+                        await RollingFileMemoryLogger.Instance.LogAsync($"Invalid bitdepth detected ({targetChannels}). Using {targetChannels} since audio has {this.Channels} channels.");
                     }
 
                     ISampleProvider rechanneledProvider;
@@ -329,7 +345,7 @@ namespace ParallelOnnxDeltaForge.Media
                     else
                     {
                         // This should never happen due to the check above, but just in case
-                        RollingFileMemoryLogger.Log($"Unexpected target channel count: {targetChannels}. No rechanneling applied.");
+                        RollingFileMemoryLogger.Instance.Log($"Unexpected target channel count: {targetChannels}. No rechanneling applied.");
                         return false;
                     }
 
@@ -360,8 +376,8 @@ namespace ParallelOnnxDeltaForge.Media
             }
             catch (Exception ex)
             {
-                RollingFileMemoryLogger.Log($"Failed to rechannel audio:");
-                RollingFileMemoryLogger.Log(ex);
+                RollingFileMemoryLogger.Instance.Log($"Failed to rechannel audio:");
+                RollingFileMemoryLogger.Instance.Log(ex);
                 return false;
             }
         }
@@ -495,10 +511,10 @@ namespace ParallelOnnxDeltaForge.Media
 
         public string? ExportWav(string? outputDirectory = null, string? fileName = null, int bits = 16)
         {
-            outputDirectory ??= AudioCollection.ExportDirectory;
+            outputDirectory ??= RollingFileMemoryLogger.Instance.Settings?.LogDirectory?? string.Empty;
             if (string.IsNullOrEmpty(outputDirectory))
             {
-                RollingFileMemoryLogger.Log("Export directory is not set.");
+                RollingFileMemoryLogger.Instance.Log("Export directory is not set.");
                 return null;
             }
 
@@ -507,19 +523,19 @@ namespace ParallelOnnxDeltaForge.Media
                 try
                 {
                     Directory.CreateDirectory(outputDirectory);
-                    RollingFileMemoryLogger.Log($"Audio output directory '{outputDirectory}' created.");
+                    RollingFileMemoryLogger.Instance.Log($"Audio output directory '{outputDirectory}' created.");
                 }
                 catch (Exception ex)
                 {
-                    RollingFileMemoryLogger.Log($"Failed to create export directory: {outputDirectory}");
-                    RollingFileMemoryLogger.Log(ex);
+                    RollingFileMemoryLogger.Instance.Log($"Failed to create export directory: {outputDirectory}");
+                    RollingFileMemoryLogger.Instance.Log(ex);
                     return null;
                 }
             }
 
             if (this.Data.LongLength <= 0 || this.SampleRate <= 0 || this.Channels <= 0)
             {
-                RollingFileMemoryLogger.Log("Audio data is empty or invalid. Cannot export.");
+                RollingFileMemoryLogger.Instance.Log("Audio data is empty or invalid. Cannot export.");
                 return null;
             }
 
@@ -563,13 +579,13 @@ namespace ParallelOnnxDeltaForge.Media
                     writer.WriteSamples(this.Data, 0, this.Data.Length);
                 }
 
-                RollingFileMemoryLogger.Log($"Audio exported successfully: {outputPath}");
+                RollingFileMemoryLogger.Instance.Log($"Audio exported successfully: {outputPath}");
                 outFile = outputPath;
             }
             catch (Exception ex)
             {
-                RollingFileMemoryLogger.Log($"Failed to export audio to WAV: {outputPath}");
-                RollingFileMemoryLogger.Log(ex);
+                RollingFileMemoryLogger.Instance.Log($"Failed to export audio to WAV: {outputPath}");
+                RollingFileMemoryLogger.Instance.Log(ex);
                 outFile = null;
             }
 
@@ -588,7 +604,7 @@ namespace ParallelOnnxDeltaForge.Media
                 bool success = await this.ResampleAsync(sampleRate.Value, bitDepth);
                 if (!success)
                 {
-                    await RollingFileMemoryLogger.LogAsync($"Failed to resample audio for Base64 serialization. Aborting.");
+                    await RollingFileMemoryLogger.Instance.LogAsync($"Failed to resample audio for Base64 serialization. Aborting.");
                     return null;
                 }
             }
@@ -598,7 +614,7 @@ namespace ParallelOnnxDeltaForge.Media
                 bool success = await this.RechannelAsync(channels.Value);
                 if (!success)
                 {
-                    await RollingFileMemoryLogger.LogAsync("Failed to rechannel audio for Base64 serialization. Aborting.");
+                    await RollingFileMemoryLogger.Instance.LogAsync("Failed to rechannel audio for Base64 serialization. Aborting.");
                     return null;
                 }
             }
@@ -624,8 +640,8 @@ namespace ParallelOnnxDeltaForge.Media
                 }
                 catch (Exception ex)
                 {
-                    RollingFileMemoryLogger.Log($"Failed to serialize audio as Base64:");
-                    RollingFileMemoryLogger.Log(ex);
+                    RollingFileMemoryLogger.Instance.Log($"Failed to serialize audio as Base64:");
+                    RollingFileMemoryLogger.Instance.Log(ex);
                     return null;
                 }
             });

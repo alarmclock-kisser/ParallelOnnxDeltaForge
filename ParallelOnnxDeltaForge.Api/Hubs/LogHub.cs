@@ -36,7 +36,7 @@ namespace ParallelOnnxDeltaForge.Api.Hubs
             {
                 if (!_isSubscribed)
                 {
-                    RollingFileMemoryLogger.LogWritten += OnLogWritten;
+                    RollingFileMemoryLogger.Instance.LogWritten += OnLogWritten;
                     _isSubscribed = true;
                 }
             }
@@ -48,7 +48,7 @@ namespace ParallelOnnxDeltaForge.Api.Hubs
             {
                 if (_isSubscribed)
                 {
-                    RollingFileMemoryLogger.LogWritten -= OnLogWritten;
+                    RollingFileMemoryLogger.Instance.LogWritten -= OnLogWritten;
                     _isSubscribed = false;
                 }
             }

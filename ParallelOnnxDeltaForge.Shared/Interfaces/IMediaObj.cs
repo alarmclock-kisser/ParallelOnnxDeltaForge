@@ -6,17 +6,17 @@ namespace ParallelOnnxDeltaForge.Shared.Interfaces
     /// Interface for media objects (AudioObj and ImageObj).
     /// Provides common properties for media objects such as ID, creation time, name, and file path.
     /// </summary>
-    public interface IMediaObj
+    public interface IMediaObj : IDisposable
     {
         /// <summary>
         /// Gets or sets the unique identifier for the media object.
         /// </summary>
-        Guid Id { get; set; }
+        Guid Id { get; }
 
         /// <summary>
         /// Gets or sets the creation timestamp of the media.
         /// </summary>
-        DateTime CreatedAt { get; set; }
+        DateTime CreatedAt { get; }
 
         /// <summary>
         /// Gets or sets the name of the media file.
@@ -32,5 +32,7 @@ namespace ParallelOnnxDeltaForge.Shared.Interfaces
         /// Gets or sets the Pointer, if set, the media object's data is most probably on the GPU / e.g. an Accelerator-Runtime-Device
         /// </summary>
         long Pointer { get; set; }
+
+
     }
 }

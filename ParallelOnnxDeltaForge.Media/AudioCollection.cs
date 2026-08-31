@@ -13,21 +13,41 @@ using NAudio.CoreAudioApi;
 using ParallelOnnxDeltaForge.Shared;
 using ParallelOnnxDeltaForge.Shared.MediaDtos;
 using System.Runtime.Versioning;
+using ParallelOnnxDeltaForge.Shared.Interfaces;
 
 namespace ParallelOnnxDeltaForge.Media
 {
-    public class AudioCollection : IAsyncDisposable
+    public class AudioCollection : IMediaCollection, IAsyncDisposable
     {
-        public static string ExportDirectory { get; set; } = Path.GetFullPath(Environment.GetEnvironmentVariable("SHARPAI_AUDIO_EXPORT_DIR") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyMusic), "SharpAI_AudioExports"));
+        /// <summary>
+        /// Gets or sets the export directory for this media collection instance.
+        /// </summary>
+        public string ExportDirectory { get; set; } = Path.GetFullPath(Environment.GetEnvironmentVariable("SHARPAI_AUDIO_EXPORT_DIR") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyMusic), "SharpAI_AudioExports"));
+
 
         private readonly ConcurrentDictionary<Guid, AudioObj> _audios = [];
         public IReadOnlyCollection<AudioObj> Audios => this._audios.Values.ToList();
 
+        /// <summary>
+        /// Explicit implementation of <see cref="IMediaCollection.Objects"/>.
+        /// Returns the collection of audio objects as <see cref="IMediaObj"/>.
+        /// </summary>
+        public IReadOnlyCollection<IMediaObj> Objects => this._audios.Values.Select(a => (IMediaObj)a).ToList();
+
         private CancellationTokenSource? recordingCts;
 
 
-        public AudioObj? this[Guid id] => this._audios.TryGetValue(id, out AudioObj? audioObj) ? audioObj : null;
-        public AudioObj? this[int index] => (index >= 0 && index < this._audios.Count) ? this._audios.Values.ElementAt(index) : null;
+        /// <summary>
+        /// Explicit implementation of <see cref="IMediaCollection.this[Guid]"/>.
+        /// Returns the audio object by Guid as <see cref="IMediaObj"/>.
+        /// </summary>
+        public IMediaObj? this[Guid id] => this._audios.TryGetValue(id, out AudioObj? audioObj) ? (IMediaObj?)audioObj : null;
+
+        /// <summary>
+        /// Explicit implementation of <see cref="IMediaCollection.this[int]"/>.
+        /// Returns the audio object by index as <see cref="IMediaObj"/>.
+        /// </summary>
+        public IMediaObj? this[int index] => (index >= 0 && index < this._audios.Count) ? (IMediaObj?)this._audios.Values.ElementAt(index) : null;
         public AudioObj? this[string name, bool fuzzyMatch = true] => fuzzyMatch ? this._audios.Values.FirstOrDefault(a => a.Name.Contains(name, StringComparison.OrdinalIgnoreCase)) : this._audios.Values.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase));
 
         public bool IsRecording => this.recordingCts != null && this.recordingCts?.IsCancellationRequested == false;
@@ -235,14 +255,14 @@ namespace ParallelOnnxDeltaForge.Media
                 deviceIndex = this.FindActiveMicrophoneIndex();
                 if (deviceIndex == -1)
                 {
-                    await RollingFileMemoryLogger.LogAsync("No recording devices found.");
+                    await RollingFileMemoryLogger.Instance.LogAsync("No recording devices found.");
                     return null;
                 }
             }
 
             if (this.recordingCts != null)
             {
-                await RollingFileMemoryLogger.LogAsync("Recording already in progress.").ConfigureAwait(false);
+                await RollingFileMemoryLogger.Instance.LogAsync("Recording already in progress.").ConfigureAwait(false);
                 return null;
             }
 
@@ -304,7 +324,7 @@ namespace ParallelOnnxDeltaForge.Media
             };
 
             waveIn.StartRecording();
-            await RollingFileMemoryLogger.LogAsync($"Recording started on device {deviceIndex.Value} with format {waveIn.WaveFormat.SampleRate}Hz, {waveIn.WaveFormat.BitsPerSample}bit, {waveIn.WaveFormat.Channels}ch").ConfigureAwait(false);
+            await RollingFileMemoryLogger.Instance.LogAsync($"Recording started on device {deviceIndex.Value} with format {waveIn.WaveFormat.SampleRate}Hz, {waveIn.WaveFormat.BitsPerSample}bit, {waveIn.WaveFormat.Channels}ch").ConfigureAwait(false);
 
             // Wait until cancellation requested
             try
@@ -320,7 +340,7 @@ namespace ParallelOnnxDeltaForge.Media
                 catch { }
             }
 
-            await RollingFileMemoryLogger.LogAsync("Recording stopped. Processing audio...").ConfigureAwait(false);
+            await RollingFileMemoryLogger.Instance.LogAsync("Recording stopped. Processing audio...").ConfigureAwait(false);
             var result = await tcs.Task.ConfigureAwait(false);
 
             waveIn.Dispose();

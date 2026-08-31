@@ -4,17 +4,46 @@ using System.Collections.Concurrent;
 using System.Reflection;
 using Color = SixLabors.ImageSharp.Color;
 using Size = SixLabors.ImageSharp.Size;
+using ParallelOnnxDeltaForge.Shared.Interfaces;
 
 namespace ParallelOnnxDeltaForge.Media
 {
-    public class ImageCollection : IDisposable
+    public class ImageCollection : IMediaCollection
     {
         private readonly ConcurrentDictionary<Guid, ImageObj> images = [];
         private readonly object lockObj = new();
 
         public IReadOnlyCollection<ImageObj> Images => this.images.Values.ToList();
 
-        public ImageObj? this[Guid guid] => this.images.TryGetValue(guid, out ImageObj? imageObj) ? imageObj : null;
+        /// <summary>
+        /// Explicit implementation of <see cref="IMediaCollection.Objects"/>.
+        /// Returns the collection of image objects as <see cref="IMediaObj"/>.
+        /// </summary>
+        public IReadOnlyCollection<IMediaObj> Objects
+        {
+            get
+            {
+                lock (this.lockObj)
+                {
+                    return this.images.Values.Select(img => (IMediaObj)img).ToList();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Explicit implementation of <see cref="IMediaCollection.this[Guid]"/>.
+        /// Returns the image object by Guid as <see cref="IMediaObj"/>.
+        /// </summary>
+        public IMediaObj? this[Guid guid]
+        {
+            get
+            {
+                lock (this.lockObj)
+                {
+                    return this.images.TryGetValue(guid, out ImageObj? imageObj) ? (IMediaObj?)imageObj : null;
+                }
+            }
+        }
 
         public ImageObj? this[string name]
         {
@@ -27,15 +56,29 @@ namespace ParallelOnnxDeltaForge.Media
             }
         }
 
-        public ImageObj? this[int index]
+        /// <summary>
+        /// Explicit implementation of <see cref="IMediaCollection.this[int]"/>.
+        /// Returns the image object by index as <see cref="IMediaObj"/>.
+        /// </summary>
+        public IMediaObj? this[int index]
         {
             get
             {
                 lock (this.lockObj)
                 {
-                    return this.images.Values.ElementAtOrDefault(index);
+                    return (IMediaObj?)this.images.Values.ElementAtOrDefault(index);
                 }
             }
+        }
+
+        /// <summary>
+        /// Explicit implementation of <see cref="IMediaCollection.ExportDirectory"/>.
+        /// Maps to the existing <c>ExportPath</c> property.
+        /// </summary>
+        string IMediaCollection.ExportDirectory
+        {
+            get => this.ExportPath;
+            set => this.ExportPath = value;
         }
 
         // Options
@@ -98,7 +141,6 @@ namespace ParallelOnnxDeltaForge.Media
                 Img = emptyData ? null : new Image<Rgba32>(info.Width, info.Height),
                 Bitdepth = info.BitDepth,
                 Channels = info.Channels,
-                CreatedAt = info.CreatedAt,
                 Filepath = info.FilePath,
                 Name = info.Name,
                 Height = info.Height,
@@ -391,13 +433,11 @@ namespace ParallelOnnxDeltaForge.Media
         public async Task<string?> ExportImageAsync(Guid guid, string? exportPath = null, string format = "png")
         {
             exportPath ??= this.ExportPath;
-            ImageObj? obj = this[guid];
-            if (obj != null)
+            if (!this.images.TryGetValue(guid, out ImageObj? obj) || obj == null)
             {
-                return await obj.ExportAsync(exportPath, format);
+                return null;
             }
-
-            return null;
+            return await obj.ExportAsync(exportPath, format);
         }
 
         public async Task<int> CleanupOldImagesAsync(int maxImages = 1)
