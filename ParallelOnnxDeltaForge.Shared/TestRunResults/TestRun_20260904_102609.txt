@@ -1,0 +1,90 @@
+================================================================================
+  TEST RUN REPORT  ParallelOnnxDeltaForge
+  Start     : 2026-09-04 10:26:08.399 UTC
+  End       : 2026-09-04 10:26:09.014 UTC
+  Elapsed   : 0,61s
+  Passed    : 75
+  Failed    : 0
+================================================================================
+
+  [001] PASS | OnnxDeltaForgeServiceTests.RunInferenceAsync_EmptyInput_ShouldStillWork
+  [002] PASS | OnnxDeltaForgeServiceTests.RunInferenceAsync_EmptyInput_ShouldStillWork
+  [003] PASS | OnnxDeltaForgeServiceTests.RunInferenceAsync_NoModelLoaded_ShouldNotCrash
+  [004] PASS | OnnxDeltaForgeServiceTests.Dispose_Twice_ShouldNotThrow
+  [005] PASS | OnnxDeltaForgeServiceTests.Dispose_ShouldNotThrow
+  [006] PASS | OnnxDeltaForgeServiceTests.UnloadAll_ShouldCallGpuService
+  [007] PASS | OnnxDeltaForgeServiceTests.UnloadModel_NullSessionId_ShouldPassThrough
+  [008] PASS | OnnxDeltaForgeServiceTests.UnloadModel_WithSessionId_ShouldCallGpuService
+  [009] PASS | OnnxDeltaForgeServiceTests.GetLoadedAdapters_Initial_ShouldReturnEmpty
+  [010] PASS | OnnxDeltaForgeServiceTests.ClearContextAsync_ShouldClearAll
+  [011] PASS | OnnxDeltaForgeServiceTests.GetContext_Empty_ShouldReturnEmptyList
+  [012] PASS | OnnxDeltaForgeServiceTests.ExportDeltasAsync_Merge_NoModelLoaded_ShouldThrow
+  [013] PASS | OnnxDeltaForgeServiceTests.ExportDeltasAsync_Standalone_ShouldReturnSuccess
+  [014] PASS | OnnxDeltaForgeServiceTests.ComputeDeltasAsync_WithContext_ShouldReturnSet
+  [015] PASS | OnnxDeltaForgeServiceTests.ComputeDeltasAsync_NoContext_ShouldThrow
+  [016] PASS | OnnxDeltaForgeServiceTests.RunInferenceAsync_WithRawData_ShouldTrackData
+  [017] PASS | OnnxDeltaForgeServiceTests.RunInferenceAsync_WithDuration_ShouldBePositive
+  [018] PASS | OnnxDeltaForgeServiceTests.RunInferenceAsync_MultipleTurns_ShouldIncrementIndex
+  [019] PASS | OnnxDeltaForgeServiceTests.RunInferenceAsync_WithoutTrack_ShouldNotRecord
+  [020] PASS | OnnxDeltaForgeServiceTests.RunInferenceAsync_WithTrack_ShouldRecordTurn
+  [021] PASS | OnnxDeltaForgeServiceTests.LoadLoraAdapterAsync_FileNotFound_ShouldThrow
+  [022] PASS | OnnxDeltaForgeServiceTests.LoadModelAsync_InvalidPath_ShouldPropagate
+  [023] PASS | OnnxDeltaForgeServiceTests.LoadModelAsync_ValidPath_ShouldReturnSessionId
+  [024] PASS | LoRADeltaComputationServiceTests.NegativeRank_ShouldNotExplode
+  [025] PASS | LoRADeltaComputationServiceTests.HugeDimension_ShouldComplete
+  [026] PASS | LoRADeltaComputationServiceTests.MismatchedLengths_ShouldHandleGracefully
+  [027] PASS | LoRADeltaComputationServiceTests.AllZeros_ShouldNotThrow
+  [028] PASS | LoRADeltaComputationServiceTests.VerySmallData_ShouldNotThrow
+  [029] PASS | LoRADeltaComputationServiceTests.DeterministicInput_ShouldYieldSameResult
+  [030] PASS | LoRADeltaComputationServiceTests.RankVsDim_Combinations
+  [031] PASS | LoRADeltaComputationServiceTests.RankVsDim_Combinations
+  [032] PASS | LoRADeltaComputationServiceTests.RankVsDim_Combinations
+  [033] PASS | LoRADeltaComputationServiceTests.RankVsDim_Combinations
+  [034] PASS | LoRADeltaComputationServiceTests.MultipleTurns_ShouldAccumulate
+  [035] PASS | LoRADeltaComputationServiceTests.SingleTurn_ShouldProduceDeltas
+  [036] PASS | LoRADeltaComputationServiceTests.VariousRanks_ShouldRespectRank
+  [037] PASS | LoRADeltaComputationServiceTests.VariousRanks_ShouldRespectRank
+  [038] PASS | LoRADeltaComputationServiceTests.VariousRanks_ShouldRespectRank
+  [039] PASS | LoRADeltaComputationServiceTests.VariousRanks_ShouldRespectRank
+  [040] PASS | LoRADeltaComputationServiceTests.VariousRanks_ShouldRespectRank
+  [041] PASS | LoRADeltaComputationServiceTests.VariousRanks_ShouldRespectRank
+  [042] PASS | LoRADeltaComputationServiceTests.NullData_ShouldReturnEmptySet
+  [043] PASS | LoRADeltaComputationServiceTests.EmptyTurns_ShouldThrow
+  [044] PASS | DeltaExporterTests.ExportAsLoraAdapterAsync_ReadOnlyPath_ShouldNotCrash
+  [045] PASS | DeltaExporterTests.ExportAsLoraAdapterAsync_MetaData_ShouldBeAccurate
+  [046] PASS | DeltaExporterTests.MergeIntoBaseModelAsync_NullDeltas_ShouldThrow
+  [047] PASS | DeltaExporterTests.ExportAsLoraAdapterAsync_NullPath_ShouldFail
+  [048] PASS | DeltaExporterTests.MergeIntoBaseModelAsync_LayerCount_ShouldMatch
+  [049] PASS | DeltaExporterTests.MergeIntoBaseModelAsync_LayerCount_ShouldMatch
+  [050] PASS | DeltaExporterTests.MergeIntoBaseModelAsync_LayerCount_ShouldMatch
+  [051] PASS | DeltaExporterTests.MergeIntoBaseModelAsync_ValidBase_ShouldCopyAndWriteManifest
+  [052] PASS | DeltaExporterTests.MergeIntoBaseModelAsync_BaseNotFound_ShouldReturnFailure
+  [053] PASS | DeltaExporterTests.ExportAsLoraAdapterAsync_EmptyDeltas_ShouldStillWrite
+  [054] PASS | DeltaExporterTests.ExportAsLoraAdapterAsync_BytesWritten_ShouldBePositive
+  [055] PASS | DeltaExporterTests.ExportAsLoraAdapterAsync_NonExistentDirectory_ShouldCreateIt
+  [056] PASS | DeltaExporterTests.ExportAsLoraAdapterAsync_NullData_ShouldHandleGracefully
+  [057] PASS | DeltaExporterTests.ExportAsLoraAdapterAsync_VariousRanks_ShouldSucceed
+  [058] PASS | DeltaExporterTests.ExportAsLoraAdapterAsync_VariousRanks_ShouldSucceed
+  [059] PASS | DeltaExporterTests.ExportAsLoraAdapterAsync_VariousRanks_ShouldSucceed
+  [060] PASS | DeltaExporterTests.ExportAsLoraAdapterAsync_VariousRanks_ShouldSucceed
+  [061] PASS | DeltaExporterTests.ExportAsLoraAdapterAsync_ValidDelta_ShouldWriteJsonFile
+  [062] PASS | ContextTrackerTests.GetTurns_ReturnsReadOnly_ShouldNotAllowModification
+  [063] PASS | ContextTrackerTests.Clear_MultipleTimes_ShouldNotThrow
+  [064] PASS | ContextTrackerTests.RecordTurn_NullData_ShouldNotThrow
+  [065] PASS | ContextTrackerTests.RecordTurn_LargeVolume_ShouldHandleConcurrency
+  [066] PASS | ContextTrackerTests.RecordTurn_LargeVolume_ShouldHandleConcurrency
+  [067] PASS | ContextTrackerTests.RecordTurn_LargeVolume_ShouldHandleConcurrency
+  [068] PASS | ContextTrackerTests.RecordTurn_WithData_ShouldPreserveData
+  [069] PASS | ContextTrackerTests.GetTurns_Empty_ShouldReturnEmptyList
+  [070] PASS | ContextTrackerTests.Clear_ThenRecord_ShouldStartIndexAtZero
+  [071] PASS | ContextTrackerTests.Clear_ShouldResetEverything
+  [072] PASS | ContextTrackerTests.RecordTurn_ShouldAssignTimestampAndIndex
+  [073] PASS | ContextTrackerTests.RecordTurn_MultipleTurns_ShouldReturnAllOrdered
+  [074] PASS | ContextTrackerTests.RecordTurn_SingleTurn_ShouldIncrementCount
+  [075] PASS | ContextTrackerTests.Constructor_TurnCount_ShouldBeZero
+
+  ALL TESTS PASSED  OK
+
+================================================================================
+  END OF REPORT
+================================================================================

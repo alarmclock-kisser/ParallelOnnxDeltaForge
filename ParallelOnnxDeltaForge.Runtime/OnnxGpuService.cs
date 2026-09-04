@@ -25,13 +25,13 @@ namespace ParallelOnnxDeltaForge.Runtime
         }
 
 
-        public IReadOnlyList<int> GetAvailableCudaDevices()
+        public virtual IReadOnlyList<int> GetAvailableCudaDevices()
         {
 
             return [0, 1];
         }
 
-        public async Task<Guid> LoadModelAsync(string modelPath, int deviceId)
+        public virtual async Task<Guid> LoadModelAsync(string modelPath, int deviceId)
         {
             if (!File.Exists(modelPath))
             {
@@ -105,7 +105,7 @@ namespace ParallelOnnxDeltaForge.Runtime
             }
         }
 
-        public void UnloadModel(Guid? sessionId)
+        public virtual void UnloadModel(Guid? sessionId)
         {
             sessionId ??= this._activeSessions.Keys.FirstOrDefault();
             if (this._activeSessions.TryRemove(sessionId.Value, out var session))
@@ -119,7 +119,7 @@ namespace ParallelOnnxDeltaForge.Runtime
             }
         }
 
-        public void UnloadAll()
+        public virtual void UnloadAll()
         {
             this.Logger.LogInfo("[ONNX] Unloading all active models...");
             foreach (var sessionId in this._activeSessions.Keys)

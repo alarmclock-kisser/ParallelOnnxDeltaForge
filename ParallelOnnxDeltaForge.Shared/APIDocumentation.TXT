@@ -1,0 +1,1307 @@
+================================================================================
+  ParallelOnnxDeltaForge — API Documentation
+  Version: 1.0.0 | .NET 10.0 | ONNX Runtime GPU 1.29.0
+  Generated: 2026-09-04
+================================================================================
+
+TABLE OF CONTENTS
+-----------------
+  1. KEY INFO OVERVIEW
+  2. ARCHITECTURE & LAYERS
+  3. PROJECT STRUCTURE
+  4. REST API ENDPOINTS
+  5. SERVICE LAYER (Runtime)
+  6. SHARED INTERFACES
+  7. DTOS & DATA TRANSFER OBJECTS
+  8. LoRA DELTA MATH & ALGORITHM
+  9. EXPORT FORMATS
+  10. ERROR HANDLING
+  11. THREAD SAFETY & CONCURRENCY
+  12. RESOURCE LIFECYCLE
+  13. EXTENSION POINTS
+  14. MODEL FORMAT REQUIREMENTS
+
+
+================================================================================
+  1. KEY INFO OVERVIEW
+================================================================================
+
+  PURPOSE:
+  -------
+  ParallelOnnxDeltaForge is a .NET 10.0 service that loads ONNX machine learning
+  models onto GPU (CUDA), applies LoRA (Low-Rank Adaptation) weight overlays,
+  tracks chat interaction context, computes per-turn weight deltas via SVD
+  decomposition, and exports the deltas as either standalone LoRA adapter files
+  or merged into the base model.
+
+  CORE CAPABILITIES:
+  -----------------
+  [A] Load ONNX model (.onnx) to NVIDIA GPU via CUDA Execution Provider
+  [B] Load LoRA adapter weights from separate ONNX files
+  [C] Run inference with optional LoRA weight overrides
+  [D] Track chat turn I/O pairs (input tensors + base output + LoRA output)
+  [E] Compute accumulated LoRA deltas: ΔW = SVD(Σ(ΔY × X^T)) → A/B matrices
+  [F] Export deltas as:
+      - Standalone LoRA adapter JSON (paralleldeltaforge_lora_v1)
+      - Merge manifest + base model copy (manual merge pending protobuf support)
+
+  RUNTIME:
+  -------
+  - ONNX Runtime GPU 1.29.0 (CUDA EP)
+  - CUDA device IDs: 0-based (e.g., GPU 0, GPU 1)
+  - Thread-safe inference via SemaphoreSlim (single concurrent load)
+  - All async/await throughout
+
+  MODEL FORMAT:
+  ------------
+  - Base model: .onnx (required — only format supported by ONNX Runtime)
+  - LoRA adapter: .onnx (with tensor names containing "lora_A" / "lora_B")
+  - Export: JSON (standalone) or .onnx + .manifest.json (merge)
+  - GGUF / safetensors / .bin are NOT supported (wrong runtime ecosystem)
+
+  QUICK START:
+  -----------
+    1. POST /api/deltaforge/load-model        → load ONNX model to GPU
+    2. POST /api/deltaforge/load-lora-adapter  → load LoRA weights
+    3. POST /api/deltaforge/infer              → run inference, track for delta
+    4. POST /api/deltaforge/infer              → repeat for more turns
+    5. POST /api/deltaforge/compute-deltas     → compute SVD deltas
+    6. POST /api/deltaforge/export-deltas      → export adapter or merge
+    7. DELETE /api/deltaforge/unload           → free GPU memory
+
+
+================================================================================
+  2. ARCHITECTURE & LAYERS
+================================================================================
+
+  The system follows a layered, SOLID architecture with Dependency Injection:
+
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  LAYER 1: API (ParallelOnnxDeltaForge.Api)                     │
+    │  ┌───────────────────────────────────────────────────────────┐  │
+    │  │  DeltaForgeController                                     │  │
+    │  │    REST endpoints (10 endpoints)                          │  │
+    │  │    Input validation, error handling, ProblemDetails       │  │
+    │  └───────────────────────────────────────────────────────────┘  │
+    └─────────────────────────────────────────────────────────────────┘
+                              │ DI (via Program.cs)
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  LAYER 2: RUNTIME (ParallelOnnxDeltaForge.Runtime)             │
+    │  ┌────────────┐ ┌──────────────┐ ┌────────────┐               │  │
+    │  │ OnnxGpu    │ │ LoRAAdapter  │ │ Context    │               │  │
+    │  │ Service    │ │ Loader       │ │ Tracker    │               │  │
+    │  └────────────┘ └──────────────┘ └────────────┘               │  │
+    │  ┌────────────┐ ┌──────────────┐ ┌────────────┐               │  │
+    │  │ OnnxDelta  │ │ LoRADelta    │ │ Delta      │               │  │
+    │  │ ForgeSVC   │ │ Computation  │ │ Exporter   │               │  │
+    │  │ (orch.)    │ │ Service      │ │            │               │  │
+    │  └────────────┘ └──────────────┘ └────────────┘               │  │
+    └─────────────────────────────────────────────────────────────────┘
+                              │ interface contracts
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  LAYER 3: SHARED (ParallelOnnxDeltaForge.Shared)               │
+    │  ┌───────────────────────────────────────────────────────────┐  │
+    │  │  Interfaces: IOnnxDeltaForgeService, ILoRAAdapterLoader,  │  │
+    │  │  IContextTracker, IDeltaComputationService, IDeltaExporter│  │
+    │  └───────────────────────────────────────────────────────────┘  │
+    │  ┌───────────────────────────────────────────────────────────┐  │
+    │  │  DTOs: LoraAdapterInfo, LoRADelta, LoRADeltaSet,          │  │
+    │  │  ContextTurn, DeltaExportResult, InferenceRequest/Response│  │
+    │  └───────────────────────────────────────────────────────────┘  │
+    │  ┌───────────────────────────────────────────────────────────┐  │
+    │  │  RollingFileMemoryLogger (singleton, async channel-based)  │  │
+    │  └───────────────────────────────────────────────────────────┘  │
+    └─────────────────────────────────────────────────────────────────┘
+                              │ native interop
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  LAYER 4: ONNX RUNTIME (Microsoft.ML.OnnxRuntime.Gpu)          │
+    │  ┌───────────────────────────────────────────────────────────┐  │
+    │  │  InferenceSession (CUDA EP), SessionOptions, NamedOnnxValue│  │
+    │  │  OrtCUDAProviderOptions, Tensor types                     │  │
+    │  └───────────────────────────────────────────────────────────┘  │
+    └─────────────────────────────────────────────────────────────────┘
+                              │ hardware
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  NVIDIA GPU (CUDA driver, cuDNN, TensorRT optional)            │
+    └─────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+  3. PROJECT STRUCTURE
+================================================================================
+
+  ParallelOnnxDeltaForge/
+  ├── ParallelOnnxDeltaForge.slnx                    ← Solution file
+  │
+  ├── ParallelOnnxDeltaForge.Shared/                 ← Interfaces + DTOs
+  │   ├── Interfaces/
+  │   │   ├── IOnnxGpuService.cs                    ← GPU model lifecycle
+  │   │   ├── IDeltaForgeInterfaces.cs              ← 5 LoRA pipeline interfaces
+  │   │   ├── IRollingFileMemoryLogger.cs           ← Logger contract
+  │   │   └── IMedia*.cs                            ← Media collection interfaces
+  │   ├── Dtos/
+  │   │   ├── LoraAdapterInfo.cs                    ← LoRA metadata
+  │   │   ├── LoRADelta.cs                          ← A/B matrices + delta set
+  │   │   ├── ContextTurn.cs                        ← Chat turn I/O pair
+  │   │   ├── DeltaExportResult.cs                  ← Export result + request DTOs
+  │   │   └── RequestDtos.cs                        ← API request payloads
+  │   ├── Options/
+  │   │   ├── RollingFileMemoryLoggerOptions.cs     ← Logger config
+  │   │   └── ExceptionPrintOptions.cs              ← Exception formatting
+  │   ├── Utils/
+  │   │   └── UniversalHelper.cs                    ← Character set validation
+  │   └── RollingFileMemoryLogger.cs                ← Async channel logger
+  │
+  ├── ParallelOnnxDeltaForge.Runtime/                ← Business logic
+  │   ├── OnnxGpuService.cs                         ← GPU session management
+  │   ├── OnnxDeltaForgeService.cs                  ← Orchestrator (facade)
+  │   ├── LoRAAdapterLoader.cs                      ← Parse ONNX LoRA files
+  │   ├── ContextTracker.cs                         ← Thread-safe turn collector
+  │   ├── LoRADeltaComputationService.cs            ← SVD delta computation
+  │   └── DeltaExporter.cs                          ← JSON export + merge
+  │
+  ├── ParallelOnnxDeltaForge.Api/                    ← ASP.NET Core Web API
+  │   ├── Controllers/
+  │   │   ├── DeltaForgeController.cs               ← 10 LoRA endpoints
+  │   │   ├── MediaController.cs                    ← Audio/image endpoints
+  │   │   └── ApiControllerBase.cs                  ← Logging base controller
+  │   ├── Hubs/
+  │   │   └── LogHub.cs                             ← SignalR log broadcast
+  │   ├── Services/
+  │   │   ├── AssetProvider.cs                      ← Media asset management
+  │   │   └── DtoBuilders/                          ← Media DTO factories
+  │   ├── Program.cs                                ← DI wiring + pipeline
+  │   └── appsettings.json                          ← Configuration
+  │
+  ├── ParallelOnnxDeltaForge.Media/                  ← Audio/image processing
+  │   ├── AudioObj.cs                               ← NAudio integration
+  │   ├── AudioCollection.cs                        ← Audio collection
+  │   ├── ImageObj.cs                               ← ImageSharp integration
+  │   └── ImageCollection.cs                        ← Image collection
+  │
+  ├── ParallelOnnxDeltaForge.Runtime.Tests/          ← MSTest unit tests
+  │   ├── ContextTrackerTests.cs
+  │   ├── LoRADeltaComputationServiceTests.cs
+  │   ├── DeltaExporterTests.cs
+  │   └── OnnxDeltaForgeServiceTests.cs
+  │
+  └── ParallelOnnxDeltaForge.Api.Tests/              ← API integration tests
+      └── DeltaForgeControllerTests.cs
+
+
+================================================================================
+  4. REST API ENDPOINTS
+================================================================================
+
+  Base URL: https://localhost:<port>/api/deltaforge
+  Content-Type: application/json (all POST endpoints)
+  CORS: Configured via appsettings.json → "CORS:AllowedOrigins"
+
+  ┌──────────┬──────────────────────────┬─────────────────────────────────────────────┐
+  │ Method   │ Route                    │ Action                                      │
+  ├──────────┼──────────────────────────┼─────────────────────────────────────────────┤
+  │ POST     │ /load-model              │ Load ONNX model to GPU                      │
+  │ POST     │ /load-model-with-lora    │ Load model + LoRA adapter in one call       │
+  │ POST     │ /load-lora-adapter       │ Load standalone LoRA adapter                │
+  │ POST     │ /infer                   │ Run inference, optionally track for delta   │
+  │ POST     │ /compute-deltas          │ Compute SVD deltas from tracked context     │
+  │ POST     │ /export-deltas           │ Export deltas (standalone or merge)         │
+  │ GET      │ /context                 │ Inspect tracked chat turns                  │
+  │ GET      │ /adapters                │ List loaded LoRA adapters                   │
+  │ POST     │ /clear-context           │ Clear all tracked turns                     │
+  │ DELETE   │ /unload?sessionId=<guid> │ Unload model from GPU (null = first active) │
+  │ DELETE   │ /unload-all              │ Unload all models, free all GPU memory      │
+  └──────────┴──────────────────────────┴─────────────────────────────────────────────┘
+
+
+  4.1  POST /api/deltaforge/load-model
+  ─────────────────────────────────────
+  Load an ONNX model file onto a specified GPU device.
+
+  REQUEST BODY:
+  ┌───────────────┬──────────┬────────────────────────────────────────────┐
+  │ Field         │ Type     │ Description                                │
+  ├───────────────┼──────────┼────────────────────────────────────────────┤
+  │ modelPath     │ string   │ Absolute path to .onnx model file          │
+  │ deviceId      │ int      │ CUDA device ID (0 = first GPU, 1 = second) │
+  └───────────────┴──────────┴────────────────────────────────────────────┘
+
+  EXAMPLE REQUEST:
+  {
+    "modelPath": "C:\\models\\llama-3-8b.onnx",
+    "deviceId": 0
+  }
+
+  RESPONSE (200 OK):
+  "a1b2c3d4-e5f6-7890-abcd-ef1234567890"   ← Session GUID
+
+  RESPONSE (500 Error):
+  {
+    "type": "about:blank",
+    "title": "Load failed",
+    "status": 500,
+    "detail": "Model file not found: C:\\models\\llama-3-8b.onnx",
+    "instance": "/api/deltaforge/load-model"
+  }
+
+  ERRORS:
+    - FileNotFoundException: Model file path does not exist
+    - ArgumentOutOfRangeException: deviceId out of range
+    - OnnxRuntimeException: Invalid ONNX file format
+
+
+  4.2  POST /api/deltaforge/load-model-with-lora
+  ───────────────────────────────────────────────
+  Convenience endpoint: loads both base model and LoRA adapter in a single call.
+
+  REQUEST BODY:
+  ┌───────────────┬──────────┬────────────────────────────────────────────┐
+  │ Field         │ Type     │ Description                                │
+  ├───────────────┼──────────┼────────────────────────────────────────────┤
+  │ modelPath     │ string   │ Path to base .onnx model                   │
+  │ deviceId      │ int      │ CUDA device ID                             │
+  │ loraPath      │ string   │ Path to LoRA adapter .onnx file            │
+  │ loraName      │ string   │ Human-readable name for the adapter        │
+  │ rank          │ int      │ LoRA rank (default: 8)                     │
+  │ scaleFactor   │ float    │ LoRA scaling α (default: 1.0)              │
+  └───────────────┴──────────┴────────────────────────────────────────────┘
+
+  EXAMPLE REQUEST:
+  {
+    "modelPath": "C:\\models\\llama-3-8b.onnx",
+    "deviceId": 0,
+    "loraPath": "C:\\lora\\coding-finetune.onnx",
+    "loraName": "CodingFinetune",
+    "rank": 16,
+    "scaleFactor": 2.0
+  }
+
+  RESPONSE (200 OK): Session GUID string
+
+
+  4.3  POST /api/deltaforge/load-lora-adapter
+  ────────────────────────────────────────────
+  Load a LoRA adapter ONNX file, auto-detect target layers from tensor names.
+
+  REQUEST BODY:
+  ┌───────────────┬──────────┬────────────────────────────────────────────┐
+  │ Field         │ Type     │ Description                                │
+  ├───────────────┼──────────┼────────────────────────────────────────────┤
+  │ adapterPath   │ string   │ Path to LoRA .onnx file                    │
+  │ name          │ string   │ Display name for the adapter               │
+  │ rank          │ int      │ LoRA rank (default: 8)                     │
+  │ scaleFactor   │ float    │ Scaling factor (default: 1.0)              │
+  └───────────────┴──────────┴────────────────────────────────────────────┘
+
+  RESPONSE (200 OK):
+  {
+    "id": "uuid-here",
+    "adapterPath": "C:\\lora\\adapter.onnx",
+    "name": "MyAdapter",
+    "rank": 8,
+    "scaleFactor": 1.0,
+    "targetLayers": ["encoder.block.0.q_proj", "encoder.block.0.v_proj"]
+  }
+
+
+  4.4  POST /api/deltaforge/infer
+  ────────────────────────────────
+  Run a single inference pass. Optionally tracks the input/output pair for
+  later LoRA delta computation. Thread-safe via internal SemaphoreSlim.
+
+  REQUEST BODY:
+  ┌───────────────┬──────────┬────────────────────────────────────────────┐
+  │ Field         │ Type     │ Description                                │
+  ├───────────────┼──────────┼────────────────────────────────────────────┤
+  │ input         │ string   │ Input text prompt                          │
+  │ trackForDelta │ bool     │ Capture this turn for delta computation    │
+  │               │          │ (default: true)                            │
+  │ inputData     │ float[]? | Optional raw tokenized input tensor data   │
+  └───────────────┴──────────┴────────────────────────────────────────────┘
+
+  EXAMPLE REQUEST:
+  {
+    "input": "Explain quantum entanglement in simple terms",
+    "trackForDelta": true,
+    "inputData": [1, 256, 1024, 345, ...]
+  }
+
+  RESPONSE (200 OK):
+  {
+    "output": "[Inference response]",
+    "outputData": null,
+    "wasTracked": true,
+    "turnIndex": 3,
+    "durationMs": 42.5
+  }
+
+  NOTES:
+    - The output field currently returns a placeholder. Production deployment
+      requires connecting the actual ONNX InferenceSession.Run() call with
+      a tokenizer (e.g., SentencePiece, GPT2Tokenizer).
+    - If trackForDelta is true, the input is stored alongside base and
+      LoRA output activations for later SVD decomposition.
+    - Concurrent inference requests are serialized (SemaphoreSlim 1,1).
+
+
+  4.5  POST /api/deltaforge/compute-deltas
+  ─────────────────────────────────────────
+  Compute LoRA weight deltas from all tracked chat turns using thin SVD.
+
+  REQUEST BODY:
+  ┌───────────────┬──────────┬────────────────────────────────────────────┐
+  │ Field         │ Type     │ Description                                │
+  ├───────────────┼──────────┼────────────────────────────────────────────┤
+  │ targetRank    │ int      │ Desired LoRA rank for decomposition       │
+  └───────────────┴──────────┴────────────────────────────────────────────┘
+
+  EXAMPLE REQUEST:
+  {
+    "targetRank": 16
+  }
+
+  RESPONSE (200 OK):
+  {
+    "id": "uuid",
+    "name": "delta_set_10_turns",
+    "rank": 16,
+    "accumulatedTurns": 10,
+    "deltas": {
+      "output_layer": {
+        "layerName": "output_layer",
+        "aShape": [16, 4096],
+        "aData": [0.0123, -0.0456, ...],
+        "bShape": [4096, 16],
+        "bData": [0.0789, 0.0123, ...],
+        "scaleFactor": 0.847
+      }
+    }
+  }
+
+  ERRORS:
+    - ArgumentException: No tracked context turns available
+
+
+  4.6  POST /api/deltaforge/export-deltas
+  ────────────────────────────────────────
+  Compute deltas (from current context) and export them. Two modes:
+
+  Mode 0 — StandaloneAdapter: Write JSON with A/B matrices
+  Mode 1 — MergeIntoModel: Copy base model + write merge manifest
+
+  REQUEST BODY:
+  ┌───────────────┬──────────┬────────────────────────────────────────────┐
+  │ Field         │ Type     │ Description                                │
+  ├───────────────┼──────────┼────────────────────────────────────────────┤
+  │ targetRank    │ int      │ LoRA rank for computation                  │
+  │ mode          │ int      │ 0 = StandaloneAdapter, 1 = MergeIntoModel  │
+  │ outputPath    │ string   │ Output file path                           │
+  └───────────────┴──────────┴────────────────────────────────────────────┘
+
+  EXAMPLE REQUEST (Standalone):
+  {
+    "targetRank": 8,
+    "mode": 0,
+    "outputPath": "C:\\exports\\my_delta.json"
+  }
+
+  EXAMPLE REQUEST (Merge):
+  {
+    "targetRank": 8,
+    "mode": 1,
+    "outputPath": "C:\\exports\\merged_model.onnx"
+  }
+
+  RESPONSE (200 OK):
+  {
+    "success": true,
+    "outputPath": "C:\\exports\\my_delta.json",
+    "mode": 0,
+    "bytesWritten": 1048576,
+    "errorMessage": null,
+    "timestamp": "2026-09-04T12:00:00Z"
+  }
+
+  MERGE BEHAVIOR:
+    When mode=1 (MergeIntoModel), the system:
+      1. Validates base model exists (must be loaded first via load-model)
+      2. Copies base model to output path
+      3. Writes <outputPath>.manifest.json with per-layer merge instructions
+      4. Returns success with warning that manual merge is needed
+    NOTE: Full automated ONNX protobuf merge is pending Google.Protobuf
+    integration. The manifest provides all data needed for a merge script.
+
+
+  4.7  GET /api/deltaforge/context
+  ─────────────────────────────────
+  Returns all currently tracked chat turns (input/output pairs).
+
+  RESPONSE (200 OK):
+  [
+    {
+      "turnIndex": 0,
+      "input": "Hello, who are you?",
+      "output": "",
+      "inputData": [72, 101, 108, ...],
+      "baseOutputData": null,
+      "loraOutputData": null,
+      "timestamp": "2026-09-04T12:00:01Z"
+    },
+    ...
+  ]
+
+
+  4.8  GET /api/deltaforge/adapters
+  ──────────────────────────────────
+  Lists all currently loaded LoRA adapters with metadata.
+
+  RESPONSE (200 OK):
+  [
+    {
+      "id": "uuid",
+      "adapterPath": "C:\\lora\\adapter.onnx",
+      "name": "MyAdapter",
+      "rank": 8,
+      "scaleFactor": 1.0,
+      "targetLayers": ["layer_0", "layer_1"]
+    }
+  ]
+
+
+  4.9  POST /api/deltaforge/clear-context
+  ────────────────────────────────────────
+  Clears all tracked chat turns. Resets turn index counter to 0.
+
+  RESPONSE: 204 No Content
+
+
+  4.10  DELETE /api/deltaforge/unload
+  ────────────────────────────────────
+  Unloads a model session from GPU memory.
+
+  QUERY PARAMS:
+    sessionId (optional): GUID of session to unload. If omitted, unloads
+                          the first active session.
+
+  RESPONSE: 204 No Content
+
+
+  4.11  DELETE /api/deltaforge/unload-all
+  ───────────────────────────────────────
+  Unloads all active model sessions and frees all GPU memory.
+
+  RESPONSE: 204 No Content
+
+
+================================================================================
+  5. SERVICE LAYER (ParallelOnnxDeltaForge.Runtime)
+================================================================================
+
+  5.1  OnnxDeltaForgeService
+  ──────────────────────────
+  FILE: Runtime/OnnxDeltaForgeService.cs
+  IMPLEMENTS: IOnnxDeltaForgeService
+  LIFETIME: Singleton (DI-registered)
+  THREAD SAFETY: SemaphoreSlim for inference (1 concurrent)
+
+  The orchestrator/facade class. Delegates to specialized services:
+    - OnnxGpuService       → GPU model loading/unloading
+    - LoRAAdapterLoader    → LoRA file parsing
+    - ContextTracker       → Turn tracking
+    - LoRADeltaComputationService → SVD delta computation
+    - DeltaExporter        → File export
+
+  PUBLIC METHODS:
+  ┌───────────────────────────────┬────────────────────────────────────────┐
+  │ Method                        │ Description                            │
+  ├───────────────────────────────┼────────────────────────────────────────┤
+  │ LoadModelAsync(path, device)  │ Delegates to OnnxGpuService, stores    │
+  │                               │ currentSessionId + currentModelPath    │
+  ├───────────────────────────────┼────────────────────────────────────────┤
+  │ LoadLoraAdapterAsync(...)     │ Delegates to LoRAAdapterLoader         │
+  ├───────────────────────────────┼────────────────────────────────────────┤
+  │ LoadModelWithLoraAsync(...)   │ Convenience: loads model + LoRA        │
+  ├───────────────────────────────┼────────────────────────────────────────┤
+  │ RunInferenceAsync(request)    │ Acquires lock, runs inference,         │
+  │                               │ optionally records ContextTurn         │
+  ├───────────────────────────────┼────────────────────────────────────────┤
+  │ ComputeDeltasAsync(rank)      │ Gets turns from ContextTracker,        │
+  │                               │ delegates to DeltaComputationService   │
+  ├───────────────────────────────┼────────────────────────────────────────┤
+  │ ExportDeltasAsync(set, mode,  │ Routes to Exporter:                    │
+  │   path)                       │   mode=0 → StandaloneAdapter           │
+  │                               │   mode=1 → MergeIntoBaseModel          │
+  ├───────────────────────────────┼────────────────────────────────────────┤
+  │ ClearContextAsync()           │ Clears ContextTracker                  │
+  ├───────────────────────────────┼────────────────────────────────────────┤
+  │ GetContext()                  │ Returns tracked turns (read-only)      │
+  ├───────────────────────────────┼────────────────────────────────────────┤
+  │ GetLoadedAdapters()           │ Returns loaded adapter metadata        │
+  ├───────────────────────────────┼────────────────────────────────────────┤
+  │ UnloadModel(sessionId)        │ Delegates, clears currentSessionId     │
+  ├───────────────────────────────┼────────────────────────────────────────┤
+  │ UnloadAll()                   │ Delegates, clears currentSessionId     │
+  └───────────────────────────────┴────────────────────────────────────────┘
+
+  DISPOSAL:
+    Implements IDisposable pattern with virtual Dispose(bool).
+    Disposes SemaphoreSlim. Calls UnloadAll() on dispose.
+
+  PLACEHOLDER NOTE:
+    The TokenizePlaceholder() method maps characters to float values.
+    Production deployment should replace with a real tokenizer (SentencePiece,
+    GPT2Tokenizer, Tiktoken, etc.) and connect to actual InferenceSession.Run().
+
+
+  5.2  OnnxGpuService
+  ───────────────────
+  FILE: Runtime/OnnxGpuService.cs
+  IMPLEMENTS: IOnnxGpuService
+  LIFETIME: Singleton (DI-registered)
+
+  GPU MODEL LIFECYCLE:
+    Manages InferenceSession instances loaded onto CUDA GPUs.
+
+  KEY FEATURES:
+    - ConcurrentDictionary for session storage (thread-safe)
+    - SemaphoreSlim for load serialization (PCIe bus contention avoidance)
+    - CUDA provider options:
+        * device_id: targets specific GPU
+        * arena_extend_strategy: kSameAsRequested (avoid fragmentation)
+        * gpu_mem_limit: long.MaxValue (full VRAM available)
+        * cudnn_conv_algo_search: HEURISTIC
+        * do_copy_in_default_stream: 1 (optimize host↔device copies)
+    - Memory pattern enabled (optimizes buffer reuse)
+    - Graph optimization: ORT_ENABLE_ALL
+
+  METHODS:
+    GetAvailableCudaDevices()  → Returns [0, 1] (hardcoded, extendable)
+    LoadModelAsync(path, id)   → Creates InferenceSession, returns session GUID
+    UnloadModel(sessionId?)    → Disposes session, removes from dictionary
+    UnloadAll()                → Iterates and disposes all sessions
+
+
+  5.3  LoRAAdapterLoader
+  ──────────────────────
+  FILE: Runtime/LoRAAdapterLoader.cs
+  IMPLEMENTS: ILoRAAdapterLoader
+
+  PARS LoRA ONNX FILES:
+    Uses InferenceSession to open the LoRA adapter .onnx file, reads input
+    metadata to auto-detect target layer names.
+
+  TENSOR NAMING CONVENTION:
+    The loader looks for tensor names containing:
+      - "lora" → extracts layer prefix before "lora"
+      - "adapter" → extracts layer prefix before "adapter"
+    Example: "encoder.block.0.q_proj.lora_A" → layer "encoder.block.0.q_proj"
+
+  STORES: Dictionary<string, LoraAdapterInfo> keyed by adapter GUID
+
+  LIMITATIONS:
+    - Only reads tensor names from input metadata, not full tensor data
+    - Auto-detection works for standard PEFT/HuggingFace LoRA exports
+    - For non-standard naming, layers default to "default"
+
+
+  5.4  ContextTracker
+  ───────────────────
+  FILE: Runtime/ContextTracker.cs
+  IMPLEMENTS: IContextTracker
+  THREAD SAFETY: ConcurrentBag + Interlocked operations
+
+  COLLECTS CHAT TURNS:
+    Each turn stores:
+      - Input text + raw input tensor (tokenized embeddings)
+      - Base model output activations (before LoRA)
+      - LoRA-adapted output activations (after LoRA)
+      - Auto-assigned turn index (atomic increment)
+      - Auto-assigned UTC timestamp
+
+  METHODS:
+    RecordTurn(turn)   → Atomic index assignment, add to ConcurrentBag
+    GetTurns()         → Materialize sorted list by TurnIndex, return read-only
+    Clear()            → Clear bag, reset index to 0
+    TurnCount          → Current number of tracked turns
+
+  THREAD SAFETY GUARANTEES:
+    - ConcurrentBag is thread-safe for add/remove
+    - TurnIndex uses Interlocked.Increment (atomic)
+    - GetTurns() creates a new sorted list snapshot (safe iteration)
+    - Clear() resets bag AND index atomically
+
+
+  5.5  LoRADeltaComputationService
+  ────────────────────────────────
+  FILE: Runtime/LoRADeltaComputationService.cs
+  IMPLEMENTS: IDeltaComputationService
+
+  ALGORITHM: Thin SVD for Rank-K LoRA Delta Computation
+
+  MATHEMATICAL FOUNDATION:
+    Given N chat turns with input X_i and output delta ΔY_i:
+
+      ΔW ≈ Σ(ΔY_i × X_i^T)     → accumulate across turns
+
+    Then decompose the aggregated delta matrix via thin SVD:
+
+      ΔW ≈ U_k × Σ_k × V_k^T   → truncated SVD to rank k
+
+    From SVD, construct LoRA factors:
+
+      A = Σ_k^(1/2) × V_k^T    → shape [rank, d_in]
+      B = U_k × Σ_k^(1/2)      → shape [d_out, rank]
+
+    Effective weight: W_eff = W_base + scale × (B × A)
+
+  CURRENT IMPLEMENTATION (RANK-1 APPROXIMATION):
+    The current ThinSVD() computes the rank-1 outer product:
+      M = y × x^T
+      σ = ||y|| × ||x||
+      u = y / ||y||
+      v = x / ||x||
+    For k > 1, only S[0] is non-zero. This is correct for the single-
+    aggregate-vector case. Future enhancement: full matrix SVD (e.g., via
+    MathNet.Numerics.LinearAlgebra) for multi-turn matrix decomposition.
+
+  EDGE CASES:
+    - Empty turns → ArgumentException
+    - All null data → Empty LoRADeltaSet (AccumulatedTurns = 0)
+    - Zero vectors → Handled via epsilon (1e-8) in normalization
+    - Mismatched lengths → Skipped (ComputeTurnDelta returns null)
+
+  RETURNS:
+    LoRADeltaSet with:
+      - Name: "delta_set_{N}_turns"
+      - Rank: as requested
+      - Deltas: Dictionary keyed by "output_layer"
+      - AccumulatedTurns: count of turns that contributed data
+
+
+  5.6  DeltaExporter
+  ──────────────────
+  FILE: Runtime/DeltaExporter.cs
+  IMPLEMENTS: IDeltaExporter
+
+  MODE 0 — Standalone LoRA Adapter Export:
+    Writes a JSON file with:
+      - Format tag: "paralleldeltaforge_lora_v1"
+      - Rank, accumulated turns, name
+      - Per-layer: layerName, aShape, bShape, scaleFactor, aData, bData
+    Float values rounded to 8 decimal places.
+    Creates directories if they don't exist.
+
+  MODE 1 — Merge Into Base Model:
+    Current implementation (Phase 1):
+      1. Validates base model file exists
+      2. Copies base model to output path
+      3. Writes <output>.manifest.json with:
+         - action: "merge_instructions"
+         - Per-layer: instruction, shapes, A/B data, scale factor
+         - Note about manual merge requirement
+
+    Future enhancement (Phase 2):
+      - Integrate Google.Protobuf + ONNX proto definitions
+      - Parse .onnx as protobuf, modify TensorProto initializers
+      - W_merged[i] = W_base[i] + scale × (B × A)[i]
+      - Write modified protobuf back to disk
+
+  ERROR HANDLING:
+    Both methods catch all exceptions and return DeltaExportResult with
+    success=false, errorMessage=ex.Message. No exceptions leak to caller.
+
+
+================================================================================
+  6. SHARED INTERFACES
+================================================================================
+
+  6.1  IOnnxDeltaForgeService
+  ───────────────────────────
+  NAMESPACE: ParallelOnnxDeltaForge.Shared.Interfaces
+  EXTENDS: IDisposable
+
+  The primary facade interface. Orchestration of the entire LoRA delta pipeline.
+
+  METHODS:
+    Task<Guid>                  LoadModelAsync(path, deviceId)
+    Task<LoraAdapterInfo>       LoadLoraAdapterAsync(path, name, rank, scale)
+    Task<Guid>                  LoadModelWithLoraAsync(...)
+    Task<InferenceResponse>     RunInferenceAsync(InferenceRequest)
+    Task<LoRADeltaSet>          ComputeDeltasAsync(targetRank)
+    Task<DeltaExportResult>     ExportDeltasAsync(deltaSet, mode, path)
+    Task                        ClearContextAsync()
+    IReadOnlyList<ContextTurn>  GetContext()
+    IReadOnlyList<LoraAdapterInfo> GetLoadedAdapters()
+    void                        UnloadModel(Guid? sessionId)
+    void                        UnloadAll()
+
+
+  6.2  ILoRAAdapterLoader
+  ───────────────────────
+  NAMESPACE: ParallelOnnxDeltaForge.Shared.Interfaces
+
+  Loads and catalogs LoRA adapter ONNX files.
+
+  METHODS:
+    Task<LoraAdapterInfo> LoadAsync(path, name, rank, scaleFactor)
+    IReadOnlyDictionary<string, LoraAdapterInfo> GetLoadedAdapters()
+
+
+  6.3  IContextTracker
+  ────────────────────
+  NAMESPACE: ParallelOnnxDeltaForge.Shared.Interfaces
+
+  Thread-safe accumulation of chat turn I/O pairs.
+
+  METHODS:
+    void                  RecordTurn(ContextTurn)
+    IReadOnlyList<ContextTurn> GetTurns()
+    void                  Clear()
+    int                   TurnCount { get; }
+
+
+  6.4  IDeltaComputationService
+  ─────────────────────────────
+  NAMESPACE: ParallelOnnxDeltaForge.Shared.Interfaces
+
+  Computes LoRA weight deltas from accumulated context.
+
+  METHODS:
+    Task<LoRADeltaSet> ComputeFromContextAsync(turns, targetRank)
+
+
+  6.5  IDeltaExporter
+  ───────────────────
+  NAMESPACE: ParallelOnnxDeltaForge.Shared.Interfaces
+
+  Persists LoRA deltas to disk.
+
+  METHODS:
+    Task<DeltaExportResult> ExportAsLoraAdapterAsync(deltaSet, outputPath)
+    Task<DeltaExportResult> MergeIntoBaseModelAsync(deltaSet, basePath, outputPath)
+
+
+  6.6  IOnnxGpuService
+  ────────────────────
+  NAMESPACE: ParallelOnnxDeltaForge.Shared.Interfaces
+  EXTENDS: IDisposable
+
+  GPU inference session management.
+
+  METHODS:
+    IReadOnlyList<int>    GetAvailableCudaDevices()
+    Task<Guid>            LoadModelAsync(path, deviceId)
+    void                  UnloadModel(Guid? sessionId)
+    void                  UnloadAll()
+
+
+================================================================================
+  7. DTOS & DATA TRANSFER OBJECTS
+================================================================================
+
+  7.1  LoraAdapterInfo
+  ────────────────────
+  NAMESPACE: ParallelOnnxDeltaForge.Shared.Dtos
+
+  Metadata for a loaded LoRA adapter.
+
+  PROPERTIES:
+    Guid                    Id              ← Auto-generated on construction
+    string                  AdapterPath     ← File path (.onnx)
+    string                  Name            ← Display name
+    int                     Rank            ← LoRA rank (r)
+    float                   ScaleFactor     ← Scaling factor α (conventional: α/r)
+    IReadOnlyList<string>   TargetLayers    ← Layer names from tensor metadata
+
+
+  7.2  LoRADelta
+  ──────────────
+  NAMESPACE: ParallelOnnxDeltaForge.Shared.Dtos
+
+  Per-layer LoRA weight delta (A and B matrices).
+
+  PROPERTIES:
+    string                  LayerName   ← Target layer identifier
+    long[]?                 AShape      ← [rank, d_in]
+    float[]?                AData       ← Flat row-major matrix A
+    long[]?                 BShape      ← [d_out, rank]
+    float[]?                BData       ← Flat row-major matrix B
+    float                   ScaleFactor ← Per-layer scaling
+
+  MATHEMATICAL INTERPRETATION:
+    ΔW = ScaleFactor × (B × A)
+    W_effective = W_base + ΔW
+
+
+  7.3  LoRADeltaSet
+  ──────────────────
+  NAMESPACE: ParallelOnnxDeltaForge.Shared.Dtos
+
+  Collection of LoRA deltas across all layers, with metadata.
+
+  PROPERTIES:
+    Guid                                        Id
+    string                                      Name
+    int                                         Rank
+    IReadOnlyDictionary<string, LoRADelta>      Deltas   ← keyed by layer name
+    int                                         AccumulatedTurns
+
+
+  7.4  ContextTurn
+  ────────────────
+  NAMESPACE: ParallelOnnxDeltaForge.Shared.Dtos
+
+  Single chat turn I/O pair for delta computation.
+
+  PROPERTIES:
+    int                     TurnIndex       ← Auto-assigned by ContextTracker
+    string                  Input           ← Text prompt
+    string                  Output          ← Model response text
+    float[]?                InputData       ← Tokenized input tensor
+    float[]?                BaseOutputData  ← Base model logits (before LoRA)
+    float[]?                LoraOutputData  ← LoRA model logits (after LoRA)
+    DateTime                Timestamp       ← UTC timestamp
+
+
+  7.5  DeltaExportResult
+  ──────────────────────
+  NAMESPACE: ParallelOnnxDeltaForge.Shared.Dtos
+
+  Result of an export operation.
+
+  PROPERTIES:
+    bool                    Success         ← true on success, false on error
+    string?                 OutputPath      ← Path to written file
+    string?                 ErrorMessage    ← Error description (if failed)
+    DeltaExportMode         Mode            ← 0=Standalone, 1=Merge
+    long                    BytesWritten    ← File size in bytes
+    DateTime                Timestamp       ← UTC export time
+
+
+  7.6  InferenceRequest / InferenceResponse
+  ──────────────────────────────────────────
+  NAMESPACE: ParallelOnnxDeltaForge.Shared.Dtos
+
+  InferenceRequest:
+    string              Input             ← Text prompt
+    bool                TrackForDelta     ← Capture turn for delta (default: true)
+    float[]?            InputData         ← Pre-tokenized input tensor
+
+  InferenceResponse:
+    string              Output            ← Model response
+    float[]?            OutputData        ← Output tensor (logits)
+    bool                WasTracked        ← Whether turn was recorded
+    int                 TurnIndex         ← Index within session
+    double              DurationMs        ← Inference time in milliseconds
+
+
+  7.7  Request DTOs (API payloads)
+  ────────────────────────────────
+  NAMESPACE: ParallelOnnxDeltaForge.Shared.Dtos (Shared) or Controllers (Api)
+
+  LoadModelRequest:
+    string  ModelPath
+    int     DeviceId
+
+  LoadModelLoraRequest (extends LoadModelRequest):
+    string  LoraPath
+    string  LoraName
+    int     Rank           (default: 8)
+    float   ScaleFactor    (default: 1.0f)
+
+  LoadLoraRequest:
+    string  AdapterPath
+    string  Name
+    int     Rank           (default: 8)
+    float   ScaleFactor    (default: 1.0f)
+
+  ComputeDeltasRequest:
+    int     TargetRank     (default: 8)
+
+  ExportDeltasRequest:
+    int     TargetRank     (default: 8)
+    DeltaExportMode Mode
+    string  OutputPath     (default: "deltas.onnx")
+
+
+================================================================================
+  8. LoRA DELTA MATH & ALGORITHM
+================================================================================
+
+  8.1  LoRA Overview
+  ──────────────────
+  Low-Rank Adaptation (LoRA) is a parameter-efficient fine-tuning technique
+  that freezes the pre-trained model weights W and learns a low-rank
+  decomposition of the weight update:
+
+    W_effective = W_frozen + ΔW = W_frozen + B × A
+
+  where:
+    A: [rank, d_in]   — down-projection matrix
+    B: [d_out, rank]  — up-projection matrix
+    rank << min(d_in, d_out)  (typically 4, 8, 16, 64)
+
+  This reduces trainable parameters from d_in × d_out to rank × (d_in + d_out).
+
+  8.2  Delta Computation from Context
+  ────────────────────────────────────
+  Since ONNX Runtime is inference-only (no backprop), deltas are computed
+  from observed I/O pairs during chat interaction:
+
+  Step 1: For each turn, capture:
+    - X: Input activations (token embeddings / hidden states)
+    - Y_base: Base model output (before LoRA)
+    - Y_lora: LoRA-adapted output (after LoRA)
+
+  Step 2: Compute per-turn delta:
+    ΔY_i = Y_lora_i - Y_base_i
+
+  Step 3: Accumulate across N turns:
+    ΔY_agg = Σ ΔY_i
+    X_agg  = Σ X_i
+
+  Step 4: Thin SVD on rank-1 outer product:
+    M = ΔY_agg × X_agg^T  (shape: d_out × d_in)
+
+    For rank-1: σ = ||ΔY_agg|| × ||X_agg||
+                u = ΔY_agg / ||ΔY_agg||
+                v = X_agg  / ||X_agg||
+
+  Step 5: Construct LoRA factors:
+    A = √σ × v^T    → [1, d_in] (extended to target rank)
+    B = √σ × u      → [d_out, 1] (extended to target rank)
+
+  For rank k > 1: Only the first singular value is non-zero in the
+  current rank-1 approximation. Full matrix SVD would require accumulating
+    the full matrix M across turns and running truncated SVD (future work).
+
+  8.3  Scaling Factor
+  ────────────────────
+  The conventional LoRA scaling is α / r where α is a constant (e.g., 16)
+  and r is the rank. Our system uses the largest singular value as the
+  scaleFactor, which serves a similar purpose.
+
+  8.4  Merge Mathematics
+  ───────────────────────
+  To merge LoRA into the base model:
+
+    For each target layer with weights W_base:
+      1. Compute lora_delta = B × A  (shape: d_out × d_in)
+      2. Apply scale: lora_delta *= scaleFactor
+      3. Merge: W_merged[i] = W_base[i] + lora_delta[i]
+      4. Write W_merged back into the ONNX TensorProto initializer
+
+
+================================================================================
+  9. EXPORT FORMATS
+================================================================================
+
+  9.1  Standalone LoRA Adapter (JSON)
+  ────────────────────────────────────
+  FORMAT ID: "paralleldeltaforge_lora_v1"
+  FILE EXTENSION: .json
+
+  Structure:
+  {
+    "format": "paralleldeltaforge_lora_v1",
+    "rank": 8,
+    "accumulatedTurns": 42,
+    "name": "delta_set_42_turns",
+    "layers": [
+      {
+        "layerName": "output_layer",
+        "aShape": [8, 4096],
+        "bShape": [4096, 8],
+        "scaleFactor": 0.847,
+        "aData": [0.0123, -0.0456, ...],
+        "bData": [0.0789, 0.0123, ...]
+      }
+    ]
+  }
+
+  Properties:
+    - Human-readable JSON
+    - Floats rounded to 8 decimal places
+    - No external dependencies required to read
+    - Portable across platforms
+
+  9.2  Merge Manifest (JSON + .onnx)
+  ───────────────────────────────────
+  Produces TWO files:
+    1. <outputPath>.onnx         — Copy of base model
+    2. <outputPath>.manifest.json — Merge instructions
+
+  Manifest structure:
+  {
+    "action": "merge_instructions",
+    "baseModel": "C:\\models\\llama-3-8b.onnx",
+    "targetModel": "C:\\exports\\merged.onnx",
+    "rank": 8,
+    "accumulatedTurns": 42,
+    "layers": [
+      {
+        "layerName": "output_layer",
+        "instruction": "Add scale×(B×A) to 'output_layer' initializer tensor",
+        "scaleFactor": 0.847,
+        "aShape": [8, 4096],
+        "bShape": [4096, 8],
+        "aData": [...],
+        "bData": [...]
+      }
+    ],
+    "note": "Automated ONNX protobuf merge requires Google.Protobuf..."
+  }
+
+  9.3  Future: Direct ONNX Export
+  ────────────────────────────────
+  Planned integration with Google.Protobuf + ONNX proto definitions to
+  produce native .onnx LoRA adapter files and directly merge models
+  without manifest intermediary.
+
+
+================================================================================
+  10. ERROR HANDLING
+================================================================================
+
+  10.1  Global Strategy
+  ─────────────────────
+  - All service methods catch and log exceptions via RollingFileMemoryLogger
+  - API controller returns ProblemDetails (RFC 7807) with status code
+  - DeltaExporter returns DeltaExportResult with success=false instead of
+    throwing (caller inspects Success property)
+  - DeltaComputationService throws ArgumentException for empty turns
+
+  10.2  Exception Mapping
+  ───────────────────────
+  ┌───────────────────────────────┬────────────┬────────────────────────┐
+  │ Exception                     │ Status     │ API Layer Response     │
+  ├───────────────────────────────┼────────────┼────────────────────────┤
+  │ FileNotFoundException         │ 500        │ ProblemDetails         │
+  │ ArgumentOutOfRangeException     │ 500        │ ProblemDetails         │
+  │ ArgumentException             │ 500        │ ProblemDetails         │
+  │ InvalidOperationException     │ 500        │ ProblemDetails         │
+  │ OnnxRuntimeException          │ 500        │ ProblemDetails         │
+  │ Export failure (internal)     │ —          │ DeltaExportResult.fail │
+  └───────────────────────────────┴────────────┴────────────────────────┘
+
+  10.3  Logging
+  ─────────────
+  All errors are logged to:
+    - Console (when EchoToConsole enabled)
+    - File (rolling log in configured LogDirectory)
+    - SignalR broadcast (LogHub → connected clients)
+    - Memory buffer (RollingFileMemoryLogger.LogEntries)
+
+
+================================================================================
+  11. THREAD SAFETY & CONCURRENCY
+================================================================================
+
+  11.1  Concurrency Model
+  ───────────────────────
+  ┌──────────────────────────┬─────────────────────────────────────────┐
+  │ Component                │ Concurrency Mechanism                   │
+  ├──────────────────────────┼─────────────────────────────────────────┤
+  │ OnnxGpuService           │ SemaphoreSlim (1,1) for load operations │
+  │                          │ ConcurrentDictionary for sessions       │
+  ├──────────────────────────┼─────────────────────────────────────────┤
+  │ OnnxDeltaForgeService    │ SemaphoreSlim (1,1) for inference       │
+  ├──────────────────────────┼─────────────────────────────────────────┤
+  │ ContextTracker           │ ConcurrentBag for turns storage         │
+  │                          │ Interlocked for index counter           │
+  ├──────────────────────────┼─────────────────────────────────────────┤
+  │ LoRAAdapterLoader        │ Dictionary (single-writer pattern)      │
+  ├──────────────────────────┼─────────────────────────────────────────┤
+  │ RollingFileMemoryLogger  │ Channel<T> for async log writes         │
+  │                          │ ConcurrentDictionary for entries        │
+  └──────────────────────────┴─────────────────────────────────────────┘
+
+  11.2  Thread Safety Guarantees
+  ──────────────────────────────
+  - Inference: Serialized via SemaphoreSlim. No two inference calls overlap.
+  - Context tracking: ConcurrentBag is lock-free for add operations.
+  - Turn indexing: Interlocked.Increment guarantees atomicity.
+  - Session management: ConcurrentDictionary is thread-safe for add/remove.
+  - Logging: Channel<T> with BoundedChannelFullMode.DropOldest prevents
+    blocking under high log volume.
+
+  11.3  Known Constraints
+  ───────────────────────
+  - Only ONE model can be loaded at a time (per GPU device)
+  - Inference is serialized (single concurrent call)
+  - LoRA adapter loading is NOT concurrent-safe (single-writer pattern)
+
+
+================================================================================
+  12. RESOURCE LIFECYCLE
+================================================================================
+
+  12.1  DI Registration (Program.cs)
+  ──────────────────────────────────
+  All services registered as Singleton:
+
+    builder.Services.AddSingleton<LoRAAdapterLoader>();
+    builder.Services.AddSingleton<ContextTracker>();
+    builder.Services.AddSingleton<LoRADeltaComputationService>();
+    builder.Services.AddSingleton<DeltaExporter>();
+    builder.Services.AddSingleton<OnnxGpuService>();
+    builder.Services.AddSingleton<IOnnxDeltaForgeService, OnnxDeltaForgeService>();
+
+  12.2  Disposal Chain
+  ────────────────────
+  Application shutdown triggers:
+    1. IHostApplicationLifetime.ApplicationStopping fires
+    2. DI container disposes singletons (reverse registration order)
+    3. OnnxDeltaForgeService.Dispose() → SemaphoreSlim.Dispose()
+    4. OnnxGpuService.Dispose() → UnloadAll() → each InferenceSession.Dispose()
+    5. RollingFileMemoryLogger → SaveToRepository() → writes logs to disk
+
+  12.3  Manual Resource Cleanup
+  ─────────────────────────────
+  To free GPU VRAM before shutdown:
+    DELETE /api/deltaforge/unload-all
+
+  To clear tracked context:
+    POST /api/deltaforge/clear-context
+
+
+================================================================================
+  13. EXTENSION POINTS
+================================================================================
+
+  13.1  Tokenization Integration
+  ──────────────────────────────
+  CURRENT: TokenizePlaceholder() maps char → float.
+  TODO: Replace with real tokenizer:
+    - SentencePiece (.onnx-compatible)
+    - GPT2Tokenizer (BPE)
+    - Tiktoken (OpenAI-compatible)
+  Location: OnnxDeltaForgeService.TokenizePlaceholder()
+
+  13.2  Actual Inference Integration
+  ──────────────────────────────────
+  CURRENT: Returns placeholder response string.
+  TODO: Connect to OnnxGpuService's InferenceSession:
+    - Pass input tensor through tokenizer
+    - Call session.Run(inputs, outputs)
+    - Capture base output + LoRA output
+    - Record both in ContextTurn
+  Location: OnnxDeltaForgeService.RunInferenceAsync()
+
+  13.3  Full ONNX Protobuf Merge
+  ──────────────────────────────
+  CURRENT: Writes merge manifest + copies base model.
+  TODO: Add Google.Protobuf + ONNX proto packages:
+    - Parse .onnx as ModelProto
+    - Modify TensorProto initializers
+    - Write merged model
+  Location: DeltaExporter.MergeIntoBaseModelAsync()
+
+  13.4  Multi-Turn Matrix SVD
+  ────────────────────────────
+  CURRENT: Rank-1 approximation (outer product).
+  TODO: Add MathNet.Numerics:
+    - Accumulate full ΔW matrix across turns
+    - Compute truncated SVD to arbitrary rank
+    - Proper rank-k decomposition
+  Location: LoRADeltaComputationService.ThinSVD()
+
+  13.5  GPU Device Discovery
+  ───────────────────────────
+  CURRENT: Returns hardcoded [0, 1].
+  TODO: Use CUDA runtime API or ONNX provider enumeration:
+    - Query actual available GPUs
+    - Return device names + VRAM info
+  Location: OnnxGpuService.GetAvailableCudaDevices()
+
+
+================================================================================
+  14. MODEL FORMAT REQUIREMENTS
+================================================================================
+
+  14.1  Base Model
+  ────────────────
+  REQUIRED FORMAT: .onnx (ONNX Open Neural Network Exchange)
+  SUPPORTED VERSIONS: ONNX opset 14+ recommended
+  RUNTIME: Microsoft.ML.OnnxRuntime.Gpu 1.29.0
+
+  CONVERSION FROM OTHER FORMATS:
+    - PyTorch (.pt, .pth) → torch.onnx.export(model, dummy_input, "model.onnx")
+    - HuggingFace → optimum-cli export onnx --model <hf-id> ./output/
+    - GGUF → Convert to PyTorch first, then export to ONNX
+    - safetensors → Load with PyTorch, then export to ONNX
+
+  VRAM CONSIDERATIONS:
+    - Model is loaded fully into GPU VRAM
+    - Use GPU 0 for primary, GPU 1 for secondary (if available)
+    - CUDA provider options optimize memory:
+      arena_extend_strategy: kSameAsRequested
+      gpu_mem_limit: long.MaxValue
+
+  14.2  LoRA Adapter
+  ──────────────────
+  FORMAT: .onnx (LoRA weights exported as ONNX model)
+  TENSOR NAMING: Must contain "lora" or "adapter" in tensor names
+  CONVENTION:
+    <layer_name>.lora_A  → shape [rank, d_in]
+    <layer_name>.lora_B  → shape [d_out, rank]
+
+  EXPORTING LoRA TO ONNX:
+    - PEFT (HuggingFace) → save as ONNX via optimum
+    - Custom A/B matrices → create ONNX graph with initializer tensors
+
+  14.3  NOT SUPPORTED
+  ───────────────────
+  - GGUF (llama.cpp format — different inference engine)
+  - safetensors (PyTorch/HuggingFace — requires PyTorch)
+  - .bin / .ckpt (PyTorch state dicts)
+  - .pb (TensorFlow SavedModel — requires TensorFlow)
+
+
+================================================================================
+  APPENDIX A: SIGNALR LOG BROADCAST
+================================================================================
+
+  The LogHub broadcasts log entries to connected clients in real-time:
+
+  ENDPOINT: /logHub (SignalR)
+  EVENT: "LogWritten"
+  PAYLOAD: { timestamp: DateTime, line: string }
+
+  CLIENT CONNECTION:
+    var connection = new signalR.HubConnectionBuilder()
+      .withUrl("/logHub")
+      .build();
+
+    connection.on("LogWritten", (timestamp, line) => {
+      console.log(`[${timestamp}] ${line}`);
+    });
+
+    await connection.start();
+
+
+================================================================================
+  APPENDIX B: CONFIGURATION (appsettings.json)
+================================================================================
+
+  "CORS": {
+    "AllowedOrigins": ["https://localhost:63174"]
+  }
+
+  "LoggerSettings": {
+    "MaxLogEntries": 65536,
+    "CreateLogFile": true,
+    "MaxLogFiles": 16,
+    "Silent": false,
+    "LogTimestampFormat": "HH-mm-ss.fff",
+    "EchoToConsole": null,
+    "SaveToRepository": true,
+    "LogFileExtension": ".log",
+    "EchoToConsoleKeyPhrases": ["[SUCCESS]", "[ERROR]", "[WARN"]
+  }
+
+
+================================================================================
+  END OF DOCUMENTATION
+  ParallelOnnxDeltaForge v1.0.0
+================================================================================

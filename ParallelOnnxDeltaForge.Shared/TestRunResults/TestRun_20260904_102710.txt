@@ -1,0 +1,44 @@
+================================================================================
+  TEST RUN REPORT  ParallelOnnxDeltaForge
+  Start     : 2026-09-04 10:27:10.272 UTC
+  End       : 2026-09-04 10:27:10.501 UTC
+  Elapsed   : 0,23s
+  Passed    : 29
+  Failed    : 0
+================================================================================
+
+  [001] PASS | DeltaForgeControllerTests.UnloadAll_ShouldReturn204
+  [002] PASS | DeltaForgeControllerTests.UnloadModel_NullSessionId_ShouldPassNull
+  [003] PASS | DeltaForgeControllerTests.UnloadModel_WithSessionId_ShouldReturn204
+  [004] PASS | DeltaForgeControllerTests.ClearContextAsync_ShouldReturn204
+  [005] PASS | DeltaForgeControllerTests.GetAdapters_Initial_ShouldReturnEmpty
+  [006] PASS | DeltaForgeControllerTests.GetContext_WithTurns_ShouldReturnAll
+  [007] PASS | DeltaForgeControllerTests.GetContext_Empty_ShouldReturnEmptyList
+  [008] PASS | DeltaForgeControllerTests.ExportDeltasAsync_Merge_ShouldReturnSuccess
+  [009] PASS | DeltaForgeControllerTests.ExportDeltasAsync_Standalone_ShouldReturnSuccess
+  [010] PASS | DeltaForgeControllerTests.ComputeDeltasAsync_NoContext_ShouldReturn500
+  [011] PASS | DeltaForgeControllerTests.ComputeDeltasAsync_RankVariations_ShouldPassThrough
+  [012] PASS | DeltaForgeControllerTests.ComputeDeltasAsync_RankVariations_ShouldPassThrough
+  [013] PASS | DeltaForgeControllerTests.ComputeDeltasAsync_RankVariations_ShouldPassThrough
+  [014] PASS | DeltaForgeControllerTests.ComputeDeltasAsync_RankVariations_ShouldPassThrough
+  [015] PASS | DeltaForgeControllerTests.ComputeDeltasAsync_ValidRank_ShouldReturnDeltaSet
+  [016] PASS | DeltaForgeControllerTests.RunInferenceAsync_WithRawData_ShouldPassThrough
+  [017] PASS | DeltaForgeControllerTests.RunInferenceAsync_TrackSetting_ShouldPropagate
+  [018] PASS | DeltaForgeControllerTests.RunInferenceAsync_TrackSetting_ShouldPropagate
+  [019] PASS | DeltaForgeControllerTests.RunInferenceAsync_Tracked_ShouldReturnResponse
+  [020] PASS | DeltaForgeControllerTests.LoadLoraAdapterAsync_VariousRanks_ShouldPassThrough
+  [021] PASS | DeltaForgeControllerTests.LoadLoraAdapterAsync_VariousRanks_ShouldPassThrough
+  [022] PASS | DeltaForgeControllerTests.LoadLoraAdapterAsync_VariousRanks_ShouldPassThrough
+  [023] PASS | DeltaForgeControllerTests.LoadLoraAdapterAsync_Success_ShouldReturnLoraAdapterInfo
+  [024] PASS | DeltaForgeControllerTests.LoadModelWithLoraAsync_InvalidDeviceId_ShouldReturn500
+  [025] PASS | DeltaForgeControllerTests.LoadModelWithLoraAsync_InvalidDeviceId_ShouldReturn500
+  [026] PASS | DeltaForgeControllerTests.LoadModelWithLoraAsync_Success_ShouldReturnOk
+  [027] PASS | DeltaForgeControllerTests.LoadModelAsync_EmptyModelPath_ShouldReturn500
+  [028] PASS | DeltaForgeControllerTests.LoadModelAsync_FileNotFound_ShouldReturn500
+  [029] PASS | DeltaForgeControllerTests.LoadModelAsync_Success_ShouldReturnOkWithGuid
+
+  ALL TESTS PASSED  OK
+
+================================================================================
+  END OF REPORT
+================================================================================

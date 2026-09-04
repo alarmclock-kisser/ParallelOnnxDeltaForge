@@ -1,0 +1,90 @@
+================================================================================
+  TEST RUN REPORT  ParallelOnnxDeltaForge
+  Start     : 2026-09-04 10:25:18.450 UTC
+  End       : 2026-09-04 10:25:19.059 UTC
+  Elapsed   : 0,61s
+  Passed    : 75
+  Failed    : 0
+================================================================================
+
+  [001] PASS | OnnxDeltaForgeServiceTests.InvokeStub_TestBase.TestCleanup
+  [002] PASS | OnnxDeltaForgeServiceTests.InvokeStub_TestBase.TestCleanup
+  [003] PASS | OnnxDeltaForgeServiceTests.InvokeStub_TestBase.TestCleanup
+  [004] PASS | OnnxDeltaForgeServiceTests.InvokeStub_TestBase.TestCleanup
+  [005] PASS | OnnxDeltaForgeServiceTests.InvokeStub_TestBase.TestCleanup
+  [006] PASS | OnnxDeltaForgeServiceTests.InvokeStub_TestBase.TestCleanup
+  [007] PASS | OnnxDeltaForgeServiceTests.InvokeStub_TestBase.TestCleanup
+  [008] PASS | OnnxDeltaForgeServiceTests.InvokeStub_TestBase.TestCleanup
+  [009] PASS | OnnxDeltaForgeServiceTests.InvokeStub_TestBase.TestCleanup
+  [010] PASS | OnnxDeltaForgeServiceTests.InvokeStub_TestBase.TestCleanup
+  [011] PASS | OnnxDeltaForgeServiceTests.InvokeStub_TestBase.TestCleanup
+  [012] PASS | OnnxDeltaForgeServiceTests.InvokeStub_TestBase.TestCleanup
+  [013] PASS | OnnxDeltaForgeServiceTests.InvokeStub_TestBase.TestCleanup
+  [014] PASS | OnnxDeltaForgeServiceTests.InvokeStub_TestBase.TestCleanup
+  [015] PASS | OnnxDeltaForgeServiceTests.InvokeStub_TestBase.TestCleanup
+  [016] PASS | OnnxDeltaForgeServiceTests.InvokeStub_TestBase.TestCleanup
+  [017] PASS | OnnxDeltaForgeServiceTests.InvokeStub_TestBase.TestCleanup
+  [018] PASS | OnnxDeltaForgeServiceTests.InvokeStub_TestBase.TestCleanup
+  [019] PASS | OnnxDeltaForgeServiceTests.InvokeStub_TestBase.TestCleanup
+  [020] PASS | OnnxDeltaForgeServiceTests.InvokeStub_TestBase.TestCleanup
+  [021] PASS | OnnxDeltaForgeServiceTests.InvokeStub_TestBase.TestCleanup
+  [022] PASS | OnnxDeltaForgeServiceTests.InvokeStub_TestBase.TestCleanup
+  [023] PASS | OnnxDeltaForgeServiceTests.InvokeStub_TestBase.TestCleanup
+  [024] PASS | LoRADeltaComputationServiceTests.InvokeStub_TestBase.TestCleanup
+  [025] PASS | LoRADeltaComputationServiceTests.InvokeStub_TestBase.TestCleanup
+  [026] PASS | LoRADeltaComputationServiceTests.InvokeStub_TestBase.TestCleanup
+  [027] PASS | LoRADeltaComputationServiceTests.InvokeStub_TestBase.TestCleanup
+  [028] PASS | LoRADeltaComputationServiceTests.InvokeStub_TestBase.TestCleanup
+  [029] PASS | LoRADeltaComputationServiceTests.InvokeStub_TestBase.TestCleanup
+  [030] PASS | LoRADeltaComputationServiceTests.InvokeStub_TestBase.TestCleanup
+  [031] PASS | LoRADeltaComputationServiceTests.InvokeStub_TestBase.TestCleanup
+  [032] PASS | LoRADeltaComputationServiceTests.InvokeStub_TestBase.TestCleanup
+  [033] PASS | LoRADeltaComputationServiceTests.InvokeStub_TestBase.TestCleanup
+  [034] PASS | LoRADeltaComputationServiceTests.InvokeStub_TestBase.TestCleanup
+  [035] PASS | LoRADeltaComputationServiceTests.InvokeStub_TestBase.TestCleanup
+  [036] PASS | LoRADeltaComputationServiceTests.InvokeStub_TestBase.TestCleanup
+  [037] PASS | LoRADeltaComputationServiceTests.InvokeStub_TestBase.TestCleanup
+  [038] PASS | LoRADeltaComputationServiceTests.InvokeStub_TestBase.TestCleanup
+  [039] PASS | LoRADeltaComputationServiceTests.InvokeStub_TestBase.TestCleanup
+  [040] PASS | LoRADeltaComputationServiceTests.InvokeStub_TestBase.TestCleanup
+  [041] PASS | LoRADeltaComputationServiceTests.InvokeStub_TestBase.TestCleanup
+  [042] PASS | LoRADeltaComputationServiceTests.InvokeStub_TestBase.TestCleanup
+  [043] PASS | LoRADeltaComputationServiceTests.InvokeStub_TestBase.TestCleanup
+  [044] PASS | DeltaExporterTests.InvokeStub_TestBase.TestCleanup
+  [045] PASS | DeltaExporterTests.InvokeStub_TestBase.TestCleanup
+  [046] PASS | DeltaExporterTests.InvokeStub_TestBase.TestCleanup
+  [047] PASS | DeltaExporterTests.InvokeStub_TestBase.TestCleanup
+  [048] PASS | DeltaExporterTests.InvokeStub_TestBase.TestCleanup
+  [049] PASS | DeltaExporterTests.InvokeStub_TestBase.TestCleanup
+  [050] PASS | DeltaExporterTests.InvokeStub_TestBase.TestCleanup
+  [051] PASS | DeltaExporterTests.InvokeStub_TestBase.TestCleanup
+  [052] PASS | DeltaExporterTests.InvokeStub_TestBase.TestCleanup
+  [053] PASS | DeltaExporterTests.InvokeStub_TestBase.TestCleanup
+  [054] PASS | DeltaExporterTests.InvokeStub_TestBase.TestCleanup
+  [055] PASS | DeltaExporterTests.InvokeStub_TestBase.TestCleanup
+  [056] PASS | DeltaExporterTests.InvokeStub_TestBase.TestCleanup
+  [057] PASS | DeltaExporterTests.InvokeStub_TestBase.TestCleanup
+  [058] PASS | DeltaExporterTests.InvokeStub_TestBase.TestCleanup
+  [059] PASS | DeltaExporterTests.InvokeStub_TestBase.TestCleanup
+  [060] PASS | DeltaExporterTests.InvokeStub_TestBase.TestCleanup
+  [061] PASS | DeltaExporterTests.InvokeStub_TestBase.TestCleanup
+  [062] PASS | ContextTrackerTests.InvokeStub_TestBase.TestCleanup
+  [063] PASS | ContextTrackerTests.InvokeStub_TestBase.TestCleanup
+  [064] PASS | ContextTrackerTests.InvokeStub_TestBase.TestCleanup
+  [065] PASS | ContextTrackerTests.InvokeStub_TestBase.TestCleanup
+  [066] PASS | ContextTrackerTests.InvokeStub_TestBase.TestCleanup
+  [067] PASS | ContextTrackerTests.InvokeStub_TestBase.TestCleanup
+  [068] PASS | ContextTrackerTests.InvokeStub_TestBase.TestCleanup
+  [069] PASS | ContextTrackerTests.InvokeStub_TestBase.TestCleanup
+  [070] PASS | ContextTrackerTests.InvokeStub_TestBase.TestCleanup
+  [071] PASS | ContextTrackerTests.InvokeStub_TestBase.TestCleanup
+  [072] PASS | ContextTrackerTests.InvokeStub_TestBase.TestCleanup
+  [073] PASS | ContextTrackerTests.InvokeStub_TestBase.TestCleanup
+  [074] PASS | ContextTrackerTests.InvokeStub_TestBase.TestCleanup
+  [075] PASS | ContextTrackerTests.InterpretedInvoke_Method
+
+  ALL TESTS PASSED  OK
+
+================================================================================
+  END OF REPORT
+================================================================================

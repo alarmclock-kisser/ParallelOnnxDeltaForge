@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ParallelOnnxDeltaForge.Media\ParallelOnnxDeltaForge.Media.csproj" />
+    <ProjectReference Include="..\ParallelOnnxDeltaForge.Runtime\ParallelOnnxDeltaForge.Runtime.csproj" />
     <ProjectReference Include="..\ParallelOnnxDeltaForge.Shared\ParallelOnnxDeltaForge.Shared.csproj" />
   </ItemGroup>
 

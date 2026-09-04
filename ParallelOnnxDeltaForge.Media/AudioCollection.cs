@@ -17,7 +17,7 @@ using ParallelOnnxDeltaForge.Shared.Interfaces;
 
 namespace ParallelOnnxDeltaForge.Media
 {
-    public class AudioCollection : IMediaCollection, IAsyncDisposable
+    public class AudioCollection : IMediaCollection, IDisposable, IAsyncDisposable
     {
         /// <summary>
         /// Gets or sets the export directory for this media collection instance.
@@ -186,7 +186,7 @@ namespace ParallelOnnxDeltaForge.Media
             int bestDevice = 0;
             float maxPeak = 0f;
 
-            // Wir testen jedes Gerät kurz (200ms)
+            // Wir testen jedes Gerï¿½t kurz (200ms)
             for (int i = 0; i < devices.Length; i++)
             {
                 float currentPeak = this.TestDevicePeak(devices[i]);
@@ -446,6 +446,14 @@ namespace ParallelOnnxDeltaForge.Media
             var disposeTasks = this._audios.Values.Select(a => Task.Run(() => a.Dispose())).ToArray();
             await Task.WhenAll(disposeTasks);
             this._audios.Clear();
+        }
+
+        public void Dispose()
+        {
+            foreach (var audio in this._audios.Values)
+                audio.Dispose();
+            this._audios.Clear();
+            GC.SuppressFinalize(this);
         }
 
         public async ValueTask DisposeAsync()

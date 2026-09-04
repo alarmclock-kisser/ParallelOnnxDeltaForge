@@ -26,11 +26,7 @@ namespace ParallelOnnxDeltaForge.Media
         /// </summary>
         public DateTime CreatedAt { get; } = DateTime.UtcNow;
 
-        // Explicit interface implementations – IMediaObj requires setters, but these values are immutable by design.
-        Guid IMediaObj.Id => this.Id;
-        void IMediaObj.Id.set { /* Intentionally not settable */ }
-        DateTime IMediaObj.CreatedAt => this.CreatedAt;
-        void IMediaObj.CreatedAt.set { /* Intentionally not settable */ }
+        // Id and CreatedAt are read-only (match IMediaObj interface).
 
         public string FilePath { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
@@ -406,7 +402,7 @@ namespace ParallelOnnxDeltaForge.Media
                 int end = Math.Min(start + chunkSize, this.Data.Length);
                 float[] chunk = new float[chunkSize];
                 Array.Copy(this.Data, start, chunk, 0, end - start);
-                // Padding am letzten Chunk füllen mit Wert 0
+                // Padding am letzten Chunk fï¿½llen mit Wert 0
                 if (end - start < chunkSize)
                 {
                     for (int i = end - start; i < chunkSize; i++)
@@ -543,7 +539,7 @@ namespace ParallelOnnxDeltaForge.Media
             string baseName = fileName ?? (!string.IsNullOrEmpty(this.Name) ? this.Name : this.Id.ToString());
             string outputPath = Path.Combine(outputDirectory, $"{baseName}.wav");
 
-            // Falls Datei existiert, Index anhängen (z.B. "Aufnahme (1).wav")
+            // Falls Datei existiert, Index anhï¿½ngen (z.B. "Aufnahme (1).wav")
             int copyIndex = 1;
             while (File.Exists(outputPath))
             {
@@ -553,7 +549,7 @@ namespace ParallelOnnxDeltaForge.Media
             string? outFile;
             try
             {
-                // Bestimme die Ausgabebit-Tiefe: falls der Caller den Standard (16) übergeben hat,
+                // Bestimme die Ausgabebit-Tiefe: falls der Caller den Standard (16) ï¿½bergeben hat,
                 // aber dieses AudioObj eine eigene BitDepth gesetzt hat, benutze diese.
                 int outputBits = bits;
                 if (this.BitDepth > 0 && bits == 16)
@@ -561,7 +557,7 @@ namespace ParallelOnnxDeltaForge.Media
                     outputBits = this.BitDepth;
                 }
 
-                // NAudio WaveFormat definieren. Für 32 Bit nutzen wir das IEEE-Float-Format.
+                // NAudio WaveFormat definieren. Fï¿½r 32 Bit nutzen wir das IEEE-Float-Format.
                 WaveFormat format;
                 if (outputBits == 32)
                 {
@@ -662,10 +658,10 @@ namespace ParallelOnnxDeltaForge.Media
                 return emptyImageObj;
             }
 
-            // Farben für die Wellenform definieren
+            // Farben fï¿½r die Wellenform definieren
             var lineColor = SixLabors.ImageSharp.Color.FromRgb(0, 123, 255);
 
-            // Audio-Daten für die Wellenform normalisieren
+            // Audio-Daten fï¿½r die Wellenform normalisieren
             float maxAmplitude = this.Data.Length > 0 ? this.Data.Max(Math.Abs) : 1f;
             if (maxAmplitude == 0)
             {
@@ -678,7 +674,7 @@ namespace ParallelOnnxDeltaForge.Media
 
             for (int x = 0; x < width; x++)
             {
-                // Mittelwert der Samples für diesen Pixelbereich berechnen
+                // Mittelwert der Samples fï¿½r diesen Pixelbereich berechnen
                 int startSample = (int) (x * samplesPerPixel);
                 int endSample = (int) ((x + 1) * samplesPerPixel);
                 endSample = Math.Min(endSample, samples);
@@ -705,7 +701,7 @@ namespace ParallelOnnxDeltaForge.Media
                     waveformImage[x, y] = lineColor;
                 }
 
-                // Optional: zwei Linien für die Wellenform (positiv und negativ)
+                // Optional: zwei Linien fï¿½r die Wellenform (positiv und negativ)
                 int yPositive = (int) (height / 2.0f + (avgAmplitude * height / 2.0f / maxAmplitude));
                 int yNegative = (int) (height / 2.0f - (avgAmplitude * height / 2.0f / maxAmplitude));
 

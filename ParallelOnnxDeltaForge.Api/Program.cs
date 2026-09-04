@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.SignalR;
 using Newtonsoft.Json;
 using ParallelOnnxDeltaForge.Api.Services;
 using ParallelOnnxDeltaForge.Media;
+using ParallelOnnxDeltaForge.Runtime;
 using ParallelOnnxDeltaForge.Shared;
 using ParallelOnnxDeltaForge.Shared.Interfaces;
 using ParallelOnnxDeltaForge.Shared.Options;
@@ -24,6 +25,14 @@ namespace ParallelOnnxDeltaForge.Api
             builder.Services.AddSingleton<IMediaCollection, AudioCollection>();
             builder.Services.AddSingleton<IMediaCollection, ImageCollection>();
             builder.Services.AddSingleton<IAssetProvider, AssetProvider>();
+
+            // DeltaForge LoRA pipeline
+            builder.Services.AddSingleton<ParallelOnnxDeltaForge.Runtime.LoRAAdapterLoader>();
+            builder.Services.AddSingleton<ParallelOnnxDeltaForge.Runtime.ContextTracker>();
+            builder.Services.AddSingleton<ParallelOnnxDeltaForge.Runtime.LoRADeltaComputationService>();
+            builder.Services.AddSingleton<ParallelOnnxDeltaForge.Runtime.DeltaExporter>();
+            builder.Services.AddSingleton<IOnnxGpuService, OnnxGpuService>();
+            builder.Services.AddSingleton<IOnnxDeltaForgeService, ParallelOnnxDeltaForge.Runtime.OnnxDeltaForgeService>();
 
             // Configure CORS to allow requests from the specified origins
             builder.Services.AddCors(options =>
